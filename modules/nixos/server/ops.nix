@@ -1,9 +1,9 @@
 # Root operations the agent account may trigger without sudo: deploying main
 # (pulled from GitHub on a timer), rolling back, rebooting and collecting
-# garbage. Plus factory-crash-log, which only boot starts. Each is a fixed unit that takes no input; polkit lets the agent
-# account start exactly these and nothing else. Any process of that account can
-# start them, which is an accepted availability risk - see
-# docs/adr/0007-software-factory.md.
+# garbage, plus factory-crash-log, which only boot starts. Each is a fixed unit
+# that takes no input; polkit lets the agent account start exactly agentUnits
+# and nothing else. Any process of that account can start them, which is an
+# accepted availability risk - see docs/adr/0007-software-factory.md.
 {
   config,
   lib,
