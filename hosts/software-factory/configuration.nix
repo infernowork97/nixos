@@ -7,7 +7,7 @@
   myConfig = {
     # The agent account commits as infernowork97, a secondary account kept for
     # the factory. main is guarded by a ruleset (pull request required, no force
-    # pushes, no deletion) and agents are barred from `gh pr merge`.
+    # pushes, no deletion). Agents merge only when the user asks.
     user = {
       name = "factory";
       fullName = "infernowork97";

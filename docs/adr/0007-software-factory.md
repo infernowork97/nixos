@@ -90,8 +90,9 @@ These are deliberate, and recorded so they are not mistaken for oversights.
 
 - **Anything running as `factory` holds its credentials.** A prompt injection
   that gets past the classifier can use the Claude login and the bot's GitHub
-  access. That is why the bot is a separate account that cannot merge into
-  protected branches, and why nothing of value beyond it lives on the server.
+  access, merge a pull request and run `factory-ctl deploy`. That is why the
+  bot is a throwaway account, and why nothing of value beyond it lives on the
+  server.
   On suspicion: revoke the bot's keys and token, sign the server out of the
   Claude account, rebuild.
 - **The bot can push branches that change CI workflows.** Its SSH key is not
@@ -207,11 +208,13 @@ network, and the repository changed owner. What changed, and what it costs:
 - **No bot account.** Agents push as the owner's secondary account,
   infernowork97. The ruleset on `main` can no longer require an approval
   (nobody can approve their own pull request), so it requires a pull request
-  with zero approvals, and the managed policy denies `gh pr merge`. Like the
-  other deny rules, that is a backstop against the obvious form, not a
-  boundary: an agent with the token could merge through the API. Accepted,
-  because the account is a throwaway and deploys still need a human
-  `/deploy` or workflow run.
+  with zero approvals. Agents may run `gh pr merge`, but only when the user
+  asks; the policy no longer denies it, since a deny rule was never a
+  boundary (an agent with the token could merge through the API). The guards
+  that remain: the ruleset requires a pull request, the account is a
+  throwaway, and merging alone deploys nothing: a deploy is a separate
+  `/deploy`, workflow or `factory-ctl deploy` step, which a factory process
+  can also take (see the prompt-injection risk above).
 - **Admin key.** The operator machine's plain ed25519 key replaces the
   YubiKeys. Port 2222 is reachable only over the tailnet, and sudo still needs
   the admin password.
