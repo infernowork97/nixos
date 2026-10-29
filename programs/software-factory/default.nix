@@ -191,6 +191,7 @@ let
       ];
       text = ''
         ops_state_dir=${lib.escapeShellArg opsStateDir}
+        crash_dir=${lib.escapeShellArg (crashDirOf opsStateDir)}
         deploy_repo=${lib.escapeShellArg deployRepo}
         deploy_workflow=${lib.escapeShellArg deployWorkflow}
         gcroots_auto=${lib.escapeShellArg gcrootsAuto}
@@ -208,6 +209,7 @@ let
           ./ctl/status.sh
           ./ctl/disk.sh
           ./ctl/ops.sh
+          ./ctl/crash.sh
           ./ctl/main.sh
         ]}
       '';
@@ -265,6 +267,25 @@ let
       homes_dir=${lib.escapeShellArg homesDir}
       ${builtins.readFile ./space.sh}
     '';
+
+  # Copies systemd-pstore's root-only kernel crash dumps where the agent
+  # account can read them, for `factory-ctl crash-log`.
+  #
+  #   stateDir   - the root units' state directory; dumps go to its crash/
+  #   pstoreDir  - where systemd-pstore archives the dumps
+  mkCrashLog =
+    {
+      stateDir,
+      pstoreDir ? "/var/lib/systemd/pstore",
+    }:
+    rootScript "factory-crash-log" ./ops/crash-log.sh ''
+      state_dir=${lib.escapeShellArg stateDir}
+      crash_dir=${lib.escapeShellArg (crashDirOf stateDir)}
+      pstore_dir=${lib.escapeShellArg pstoreDir}
+    '';
+
+  # The crash dumps' copies, shared by the root unit and factory-ctl.
+  crashDirOf = stateDir: "${stateDir}/crash";
 
   rootScript =
     name: script: settings:
@@ -355,6 +376,7 @@ in
     mkBoot
     mkDeploy
     mkMaintenance
+    mkCrashLog
     admin
     mkEgressRules
     ;

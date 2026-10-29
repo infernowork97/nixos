@@ -1,9 +1,9 @@
 # Root operations the agent account may trigger without sudo: deploying main
 # (pulled from GitHub on a timer), rolling back, rebooting and collecting
-# garbage. Each is a fixed unit that takes no input; polkit lets the agent
-# account start exactly these and nothing else. Any process of that account can
-# start them, which is an accepted availability risk - see
-# docs/adr/0007-software-factory.md.
+# garbage, plus factory-crash-log, which only boot starts. Each is a fixed unit
+# that takes no input; polkit lets the agent account start exactly agentUnits
+# and nothing else. Any process of that account can start them, which is an
+# accepted availability risk - see docs/adr/0007-software-factory.md.
 {
   config,
   lib,
@@ -23,6 +23,7 @@ let
     tokenFile = config.sops.secrets.factory-deploy-token.path;
   };
   maintenance = factory.mkMaintenance { inherit stateDir; };
+  crashLog = factory.mkCrashLog { inherit stateDir; };
 
   # Below this share of free space on / the hourly check starts factory-gc,
   # long before the weekly timer would.
@@ -87,6 +88,15 @@ in
       factory-reboot = oneshot "Reboot, unless booted less than 10 minutes ago" "${lib.getExe maintenance} reboot";
       factory-gc = oneshot "Keep two generations per profile and collect garbage" "${lib.getExe maintenance} gc";
       factory-gc-pressure = oneshot "Collect garbage when less than ${toString gcBelowFreePercent}% of / is free" gcOnPressure;
+      # The panic of a boot that died early is only in pstore, which is
+      # root-only; this makes it readable for `factory-ctl crash-log`.
+      factory-crash-log =
+        oneshot "Copy kernel crash dumps from pstore for the agent account" (lib.getExe crashLog)
+        // {
+          wantedBy = [ "multi-user.target" ];
+          wants = [ "systemd-pstore.service" ];
+          after = [ "systemd-pstore.service" ];
+        };
     };
 
     systemd.timers = {
