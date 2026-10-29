@@ -1,20 +1,16 @@
-# Hetzner Cloud's single virtio disk. A 1M BIOS boot partition for GRUB on the
-# legacy-BIOS CX machines, an ESP so the same layout boots under UEFI, and an
-# unencrypted root: an encrypted one would need someone to unlock it over SSH
-# after every reboot, and the hypervisor can read guest memory regardless.
+# The Omen's 1 TB NVMe SSD, addressed by id so a USB stick plugged in at install time
+# can never be the one wiped. An ESP for systemd-boot and an unencrypted root:
+# an encrypted one would need someone at the keyboard after every reboot.
 {
   disko.devices.disk.main = {
     type = "disk";
-    device = "/dev/sda";
+    # The 1 TB NVMe (CA5-8D1024), from `ls -l /dev/disk/by-id` on the box.
+    device = "/dev/disk/by-id/nvme-NVMe_CA5-8D1024_00210650002E";
     content = {
       type = "gpt";
       partitions = {
-        boot = {
-          size = "1M";
-          type = "EF02";
-        };
         ESP = {
-          size = "512M";
+          size = "1G";
           type = "EF00";
           content = {
             type = "filesystem";

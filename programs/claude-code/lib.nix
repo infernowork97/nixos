@@ -241,7 +241,7 @@ let
             if [ ! -f "${path}" ]; then
               echo "Error: MCP server '${serverName}' needs ${path}, which does not exist." >&2
               echo "$(hostname -s) declares this secret via myConfig.secrets, so it should be there." >&2
-              echo "Check the age key (just darwin-install-age-key) and re-run darwin-rebuild switch." >&2
+              echo "Check the age key at /var/lib/sops-age/keys.txt and rebuild the host." >&2
               exit 1
             fi
             ${envVar}=$(cat "${path}")

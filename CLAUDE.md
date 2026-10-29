@@ -1,21 +1,20 @@
 # NixOS Configuration
 
-Mono-repo for NixOS, nix-darwin, and dev-shell configs. Entry point: `flake.nix`.
+Mono-repo for the `software-factory` NixOS server (an HP Omen laptop at home) and its dev shells. Entry point: `flake.nix`.
 
 ## Directory Structure
 
 ```
-flake.nix       — outputs: devShells, nixosConfigurations, darwinConfigurations
-lib/            — system builder helpers (NixOS, Darwin, dev shells)
+flake.nix       — outputs: devShells, nixosConfigurations, checks
+lib/            — system builder helpers (mkNixosServer, forAllSystems)
 adapters/       - bind flake inputs to host-agnostic programs (agents.nix, claude-code.nix)
 hosts/          — per-host identity (hostname, user)
-modules/*.nix   — cross-platform modules imported by both NixOS and Darwin (e.g. nix.nix, home-manager.nix, theme.nix, secrets.nix)
-modules/nixos/  — NixOS-only system configuration (server/ - software-factory only)
-modules/macos/  — nix-darwin-only system configuration
-modules/home/   — Home Manager configuration shared across all hosts
+modules/*.nix   — modules every system imports (e.g. nix.nix, home-manager.nix, theme.nix, secrets.nix)
+modules/nixos/  — NixOS system configuration (server/ - software-factory)
+modules/home/   — Home Manager modules (factory/ is the agent account's profile)
 programs/       — reusable, host-agnostic program configs
 programs/agents/— agent-agnostic config shared by every coding agent (AGENTS.md, skill catalog)
-shells/         — dev shells (default for repo recipes, nixos-install, darwin-install)
+shells/         — dev shells (default for repo recipes, factory-install for the operator machine)
 secrets/        — sops-encrypted: common.yaml (global) + hosts/<hostname>.yaml
 deslop/         - the architecture rules `deslop check .` enforces, and their baseline
 ```
@@ -49,7 +48,7 @@ Hosts declare only their hostname and user identity. All real configuration live
 
 ### `lib/` — system assembly
 
-Helpers that compose inputs, modules, and hosts into complete NixOS/Darwin system configurations.
+Helpers that compose inputs, modules, and hosts into complete NixOS system configurations.
 Only `flake.nix` imports `lib/`; everything else is handed what it needs.
 
 ### `adapters/` - flake inputs into programs
@@ -64,7 +63,7 @@ program needs a flake input.
 
 1. Create `programs/<name>/default.nix` as a plain function returning an attrset of derivations.
 2. Create `modules/home/<name>.nix` as a thin HM wrapper that imports it via `root`.
-3. Register the HM module in `modules/home/default.nix`.
+3. Register the HM module in `modules/home/factory/default.nix`.
 4. Optionally import `programs/<name>` directly in any `shells/` that need it.
 
 ## Checks
@@ -81,9 +80,7 @@ wrong tool for iterating.
    a `software-factory` host eval for `programs/kotlin`, `software-factory`,
    `playwright` and `qa` (Linux only) for `programs/playwright`, `typos` - as `nix build --no-link .#checks.x86_64-linux.<name>`.
 3. A `modules/` or `hosts/` edit: evaluate the touched host only, with
-   `nix eval --raw .#nixosConfigurations.<host>.config.system.build.toplevel.drvPath`
-   (`lenovo-old`, `software-factory`) or
-   `nix eval --raw .#darwinConfigurations.<host>.system.drvPath` (`macos-main`, `macos-work`).
+   `nix eval --raw .#nixosConfigurations.software-factory.config.system.build.toplevel.drvPath`.
    An added, moved or re-pointed import: `nix develop -c just architecture`
    (Deslop, under a second).
 4. `just quick-check` before handing back mid-work: lint, architecture, format and every
@@ -93,15 +90,9 @@ wrong tool for iterating.
 
 ## Dependency Updates
 
-**`nixpkgs` tracks `nixpkgs-26.05-darwin`, not `nixos-26.05`. That is deliberate - do not "fix" it.**
+**`nixpkgs` tracks `nixos-26.05`**, the branch Hydra advances only once its Linux binaries are in `cache.nixos.org`. The only host is x86_64-linux.
 
-Both branches fast-forward along `release-26.05`, but different Hydra jobsets advance them, so they land on different revisions. A rev from `nixos-26.05` is guaranteed to have *Linux* binaries in `cache.nixos.org`; darwin coverage is incidental. One such rev cost hours of Swift and .NET compilation and had to be reverted (`987b09a` → `58f2f8e`). See `docs/adr/0004-darwin-tracks-the-darwin-channel.md`; `lenovo-old`'s side of that trade is tracked in `docs/NON-DARWIN-NIXOS-ISSUES.md`.
-
-`just darwin-cache-check` dry-runs the `macos-main` closure and fails if anything in `just/nix-darwin/expensive-builds.deny` would be built locally. Run it before pulling a dependency bump; CI runs it on every PR in the `cache-guard` job. It runs on Linux because `--dry-run` only queries substituters and never needs a darwin builder, but the substituter list in the workflow must stay in sync with `modules/nix.nix`, or it reports false misses.
-
-The denylist is a plain pattern-per-line file, edited by hand. Anchor every pattern with `^`: unanchored, `go-1\.` also matches car`go-1.9`6.1-aarch64-apple-darwin, which herdr's rust-overlay toolchain builds every time. The recipe self-tests its own pipeline against a synthetic plan before trusting a real one, because both of its failure modes report a bad plan as clean.
-
-Dependabot splits nix inputs into `nixpkgs-core` (guard-gated), `ai` (agent tooling and skill sources) and `ungrouped` (a catch-all matching everything else), so a nixpkgs rev the guard rejects does not also hold back herdr, llm-agents and the skills, and an input nobody classified still gets updates instead of silently freezing. `ungrouped` restates the other two memberships in `exclude-patterns` because dependabot has no group-reference syntax; keep them in step.
+Dependabot splits nix inputs into `nixpkgs-core`, `ai` (agent tooling and skill sources) and `ungrouped` (a catch-all matching everything else), so a nixpkgs rev that breaks the build does not also hold back llm-agents and the skills, and an input nobody classified still gets updates instead of silently freezing. `ungrouped` restates the other two memberships in `exclude-patterns` because dependabot has no group-reference syntax; keep them in step.
 
 ## Secrets
 
@@ -111,7 +102,7 @@ Dependabot splits nix inputs into `nixpkgs-core` (guard-gated), `ai` (agent tool
 Every secret has a **scope**, which picks the file it is read from:
 `global` -> `secrets/common.yaml` (every host), `host` -> `secrets/hosts/<hostname>.yaml`
 (only hosts that declare it). Names are bare: `figma-token`, never
-`figma-token-macos-work`. The file already says which host it belongs to.
+`figma-token-software-factory`. The file already says which host it belongs to.
 
 `modules/secrets.nix` holds the registry, the age key path and the expansion
 into `sops.secrets`. A host declares what it provides in one line
@@ -202,11 +193,10 @@ vacuously for none. This is the only mechanism that gates a server to a host.
 machine. There is no secret to inject, so a remote server carries `env = { }`
 and is available on every host. **A remote server cannot be host-gated by the
 secrets mechanism.** Keeping one off a machine means not running a flavor that
-lists it - which is why `claude-pm` exists on `macos-main` but is simply not
-used there.
+lists it on that host.
 
-The OAuth grant lives in the **macOS Keychain** (on Linux,
-`~/.claude/.credentials.json`) under a key derived from the server's `name`,
+The OAuth grant lives in `~/.claude/.credentials.json` (the Keychain on
+macOS) under a key derived from the server's `name`,
 `type`, `url` and `headers`. Nothing about it is in `~/.claude.json`, which is
 why the wrapper replacing `.mcpServers` wholesale on every launch cannot lose
 it, and why switching flavors never forces a re-login. Two things do orphan a
@@ -231,7 +221,7 @@ Control units run the unwrapped binary, so its profile installs `qa` too.
 
 `secretFiles` maps an env var to a secret **name**, for a program that reads
 the file itself: the wrapper exports the decrypted file's **path**, never its
-value (`QA_EVM_KEY_FILE` -> `qa-sepolia-key`, declared on `macos-work` only).
+value (`QA_EVM_KEY_FILE` -> `qa-sepolia-key`, declared on no host today).
 A host without the secret gets no variable. Where one is exported,
 `withSecretFileGuard` in `lib.nix` adds `Read` deny rules over the secrets
 directory (`/run/secrets` and the `/run/secrets.d` it resolves to) and the
@@ -300,10 +290,9 @@ via Claude Code Remote Control. Its configuration must never change another
 host.** See `docs/adr/0007-software-factory.md` (design, trust boundaries,
 accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
 
-- `lib.mkNixosServer` imports `modules/nixos/server/` and no desktop module;
-  nothing else imports that directory. The agent account's Home Manager profile
-  is `modules/home/factory/`, its own import list - `modules/home/default.nix`
-  is untouched by it.
+- `lib.mkNixosServer` imports `modules/nixos/server/`; nothing else imports
+  that directory. The agent account's Home Manager profile is
+  `modules/home/factory/`, its own import list.
 - `programs/software-factory/` holds the logic: managed settings (billing and
   permission policy), the Remote Control launchers, `factory-ctl` (`ctl/`), the
   root deploy and maintenance scripts (`ops/`), the admin agent's project
@@ -329,6 +318,14 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
   outside `packages` so no other host installs it.
 - The server has its own sops age key; `secrets/common.yaml` is not encrypted
   to it.
+- **The box is an HP Omen 15-ax005 laptop at home** (`modules/nixos/server/omen.nix`):
+  systemd-boot, lid and sleep disabled, Wi-Fi through NetworkManager from the
+  `wifi-env` secret, public nameservers because the egress rules bar the agent
+  account from the LAN. It is installed with nixos-anywhere from the operator
+  machine over a wired link, inside `nix develop .#factory-install`.
+- **Agents push as infernowork97, not a bot**: `main` is guarded by a ruleset
+  (pull request required, 0 approvals) and the managed policy denies
+  `gh pr merge`, so merging stays a human step.
 - **This repository is public.** Never commit IP addresses, tailnet names,
   private repository names or anything that maps the server's attack surface
   beyond what the Nix config itself states. Private repositories are added on
@@ -343,7 +340,7 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
 - `modules/home/languages/*.nix` — global LSP binaries and dev tools installed via Home Manager (e.g. `hls`, `fourmolu`, `vtsls`).
 - `nil_ls` is the only LSP with its binary baked into Neovim — Nix files have no project dev shell.
 
-**direnv** (enabled in `modules/home/default.nix` via `programs.direnv.nix-direnv`) auto-activates a project's dev shell on `cd`. Project flakes only need a `.envrc` containing `use flake`. This puts project-pinned LSP binaries (e.g. GHC-matched HLS) on PATH, which Neovim's lspconfig picks up automatically.
+**Project dev shells** put project-pinned LSP binaries (e.g. GHC-matched HLS) on PATH, which Neovim's lspconfig picks up automatically. The box has no direnv; agents enter a project's shell with `nix develop`.
 
 Project flakes have **no dependency on this nixos repo** — they are standalone.
 

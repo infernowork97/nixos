@@ -1,9 +1,3 @@
-- architecture#darwin-is-not-nixos#programs/agents/skills/lib#unresolved#builtins.readDir
-  dir
-- architecture#darwin-is-not-nixos#programs/agents/skills/lib#unresolved#dir + "/${name}"
-- architecture#darwin-is-not-nixos#programs/agents/skills/lib#unresolved#source.src
-  + "/${root}"
-- architecture#darwin-is-not-nixos#programs/agents/skills/lib#unresolved#sub + "/SKILL.md"
 - architecture#lib-is-private-to-the-flake#programs/agents/skills/lib#unresolved#builtins.readDir
   dir
 - architecture#lib-is-private-to-the-flake#programs/agents/skills/lib#unresolved#dir
@@ -13,14 +7,6 @@
 - architecture#lib-is-private-to-the-flake#programs/agents/skills/lib#unresolved#sub
   + "/SKILL.md"
 - architecture#lib-is-private-to-the-flake#programs/software-factory/default#unresolved#builtins.readFile
-  script
-- architecture#nixos-is-not-darwin#programs/agents/skills/lib#unresolved#builtins.readDir
-  dir
-- architecture#nixos-is-not-darwin#programs/agents/skills/lib#unresolved#dir + "/${name}"
-- architecture#nixos-is-not-darwin#programs/agents/skills/lib#unresolved#source.src
-  + "/${root}"
-- architecture#nixos-is-not-darwin#programs/agents/skills/lib#unresolved#sub + "/SKILL.md"
-- architecture#nixos-is-not-darwin#programs/software-factory/default#unresolved#builtins.readFile
   script
 - architecture#nothing-imports-the-flake#programs/agents/skills/lib#unresolved#builtins.readDir
   dir

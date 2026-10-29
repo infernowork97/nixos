@@ -44,16 +44,14 @@ set-password-hash $host:
 
     sudo -v
     if ! sudo -n test -f "$key_file"; then
-        echo "ERROR: no age key at $key_file - restore it with: just darwin-install-age-key" >&2
+        echo "ERROR: no age key at $key_file - create it with: just operator-age-key" >&2
         exit 1
     fi
     export SOPS_AGE_KEY_CMD="sudo -n cat $key_file"
 
-    # macOS has no mkpasswd and its libc cannot do yescrypt at all, so a Mac
-    # cannot hash a NixOS password without help. Use whatever is on PATH (the
-    # nixos-install shell ships it) and otherwise a flake.lock-pinned copy, the
-    # same way the `typos` recipe pins its tool. nixpkgs#mkpasswd, not
-    # nixpkgs#whois: the darwin build of whois carries no mkpasswd binary.
+    # Use whatever is on PATH (the factory-install shell ships it) and
+    # otherwise a flake.lock-pinned copy, the same way the `typos` recipe pins
+    # its tool.
     if command -v mkpasswd >/dev/null 2>&1; then
         mkpasswd_cmd=(mkpasswd)
     else
@@ -112,7 +110,7 @@ edit-secrets $host="":
 
     sudo -v
     if ! sudo -n test -f "$key_file"; then
-        echo "ERROR: no age key at $key_file - restore it with: just darwin-install-age-key" >&2
+        echo "ERROR: no age key at $key_file - create it with: just operator-age-key" >&2
         exit 1
     fi
 

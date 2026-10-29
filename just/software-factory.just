@@ -1,10 +1,11 @@
 # ─── Software factory ────────────────────────────────────────────────────────
-# Recipes for the software-factory server, run from macos-main. The order of a
-# first install is in docs/SOFTWARE-FACTORY.md.
+# Recipes for the software-factory box, run on the operator machine (Linux)
+# inside `nix develop .#factory-install`. The order of a first install is in
+# docs/SOFTWARE-FACTORY.md.
 #
-# Hosts are reached by their MagicDNS name, so these need Tailscale up on this
-# Mac (`just macos-main-tailscale-up`), except factory-install, which talks to
-# the fresh server's public address over the internet.
+# Hosts are reached by their MagicDNS name, so these need Tailscale up on the
+# operator machine (`tailscale up`), except factory-install, which talks to the
+# box's Ubuntu over the home LAN.
 #
 # Parameters are declared as `$name`: just passes them as environment variables
 # instead of splicing them into the script text, so a hostile argument is inert.
@@ -12,6 +13,47 @@
 # local process could read them from the process list.
 
 # ─── Secrets ─────────────────────────────────────────────────────────────────
+
+# Copies stdin to the clipboard, Wayland or X11; with no input, clears it.
+_clip := 'clip() { if [ -n "${WAYLAND_DISPLAY:-}" ]; then wl-copy; else xclip -selection clipboard; fi; }'
+
+# The operator's own age key: the one that can edit every secrets file. It lives
+# root-only at /var/lib/sops-age/keys.txt, where every secrets recipe reads it
+# through sudo, and a copy goes to Bitwarden through the clipboard. Only the
+# public half is committed, in .sops.yaml.
+#
+# Generate the operator machine's age key (root-only) and copy it for Bitwarden
+operator-age-key:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ _clip }}
+    marker='# operator-age-key: not generated yet'
+    key_file=/var/lib/sops-age/keys.txt
+    grep -qF "$marker" .sops.yaml || {
+        echo "ERROR: .sops.yaml already lists an operator key." >&2
+        exit 1
+    }
+
+    sudo -v
+    if sudo -n test -e "$key_file"; then
+        echo "Reusing the existing key at $key_file."
+    else
+        key=$(age-keygen 2>/dev/null)
+        printf '%s\n' "$key" | sudo install -D -m 600 -o root -g root /dev/stdin "$key_file"
+        printf '%s\n' "$key" | clip
+        unset key
+        echo "The private key is on the clipboard. Save it in Bitwarden as"
+        echo "'operator-age-key' (the whole text)."
+        read -rsp "Press Enter once saved - the clipboard is cleared in 120s either way. " -t 120 || true
+        echo
+        clip </dev/null
+        echo "Clipboard cleared."
+    fi
+
+    public=$(sudo -n cat "$key_file" | age-keygen -y)
+    sed -i "s|$marker|- $public # operator|" .sops.yaml
+    echo "Added $public to .sops.yaml."
+    echo "Next: just factory-generate-age-key"
 
 # Nothing is written to disk: age-keygen prints the key to a shell variable,
 # which goes to the clipboard for Bitwarden and is then cleared. Only the public
@@ -22,6 +64,7 @@
 factory-generate-age-key:
     #!/usr/bin/env bash
     set -euo pipefail
+    {{ _clip }}
     marker='# software-factory-age-key: not generated yet'
     grep -qF "$marker" .sops.yaml || {
         echo "ERROR: .sops.yaml already lists a software-factory key." >&2
@@ -30,32 +73,27 @@ factory-generate-age-key:
         exit 1
     }
 
-    if command -v age-keygen >/dev/null 2>&1; then
-        age_keygen=(age-keygen)
-    else
-        age_keygen=(nix shell --inputs-from . nixpkgs#age -c age-keygen)
-    fi
-
-    key=$("${age_keygen[@]}" 2>/dev/null)
+    key=$(age-keygen 2>/dev/null)
     public=$(printf '%s\n' "$key" | sed -n 's/^# public key: //p')
     [ -n "$public" ] || { echo "ERROR: age-keygen produced no public key." >&2; exit 1; }
 
-    printf '%s\n' "$key" | pbcopy
+    printf '%s\n' "$key" | clip
     unset key
     echo "The private key is on the clipboard. Save it in Bitwarden as"
     echo "'software-factory-age-key' (the whole text, both lines)."
     read -rsp "Press Enter once saved - the clipboard is cleared in 120s either way. " -t 120 || true
     echo
-    pbcopy </dev/null
+    clip </dev/null
     echo "Clipboard cleared."
 
-    sed -i '' "s|$marker|- $public # software-factory|" .sops.yaml
+    sed -i "s|$marker|- $public # software-factory|" .sops.yaml
     echo "Added $public to .sops.yaml."
     echo "Next: just factory-secrets"
 
 # Fills secrets/hosts/software-factory.yaml with everything the host declares:
 # the admin password (reusing set-password-hash), the Tailscale auth key, the
-# bot's GitHub token, and the probe modules/secrets.nix requires.
+# agents' GitHub token, the Wi-Fi credentials, and the probe modules/secrets.nix
+# requires.
 #
 # Write every secret software-factory needs into its sops file
 factory-secrets:
@@ -64,9 +102,9 @@ factory-secrets:
     file=secrets/hosts/software-factory.yaml
     key_file=/var/lib/sops-age/keys.txt
 
-    if grep -qF '# software-factory-age-key: not generated yet' .sops.yaml; then
-        echo "ERROR: run 'just factory-generate-age-key' first, or the server" >&2
-        echo "could not decrypt its own secrets." >&2
+    if grep -qF 'age-key: not generated yet' .sops.yaml; then
+        echo "ERROR: run 'just operator-age-key' and 'just factory-generate-age-key'" >&2
+        echo "first, or nobody could decrypt these secrets." >&2
         exit 1
     fi
 
@@ -75,18 +113,13 @@ factory-secrets:
     sudo -v
     export SOPS_AGE_KEY_CMD="sudo -n cat $key_file"
 
-    if command -v jq >/dev/null 2>&1; then
-        jq_cmd=(jq)
-    else
-        jq_cmd=(nix run --inputs-from . nixpkgs#jq --)
-    fi
-
-    # sops wants the value as JSON; jq -R quotes and escapes it.
+    # sops wants the value as JSON; jq -Rs quotes and escapes it.
+    put() { jq -Rs . | sops set --value-stdin "$file" "[\"$1\"]"; }
     set_secret() {
         local name="$1" prompt="$2" value
         read -rsp "$prompt: " value; echo
         [ -n "$value" ] || { echo "ERROR: $name is empty." >&2; exit 1; }
-        printf '%s' "$value" | "${jq_cmd[@]}" -R . | sops set --value-stdin "$file" "[\"$name\"]"
+        printf '%s' "$value" | put "$name"
         echo "Wrote $name."
     }
 
@@ -94,18 +127,41 @@ factory-secrets:
     echo "tagged tag:factory. Apply tailscale/policy.hujson first (just tailscale-apply)."
     set_secret tailscale-authkey "Tailscale auth key"
 
-    echo "Bot account > Settings > Developer settings > Tokens (classic): scope 'repo' only."
-    set_secret gh-token "Bot GitHub token"
+    echo "infernowork97 > Settings > Developer settings > Tokens (classic):"
+    echo "scopes 'repo', 'workflow' and 'read:org'."
+    set_secret gh-token "GitHub token (ghp_...)"
 
-    printf '"%s"' "unused" | sops set --value-stdin "$file" '["example-global"]'
+    # An environment file for NetworkManager's Wi-Fi profile (omen.nix).
+    # Single-quoted, so the values may hold anything but a quote or a newline.
+    read -rp "Wi-Fi SSID: " ssid
+    read -rsp "Wi-Fi password: " psk; echo
+    case "$ssid$psk" in
+        *"'"* | *$'\n'*) echo "ERROR: the SSID or password contains a single quote or newline." >&2; exit 1 ;;
+    esac
+    [ -n "$ssid" ] && [ -n "$psk" ] || { echo "ERROR: empty SSID or password." >&2; exit 1; }
+    printf "WIFI_SSID='%s'\nWIFI_PSK='%s'\n" "$ssid" "$psk" | put wifi-env
+    unset psk
+    echo "Wrote wifi-env."
+
+    printf 'unused' | put example-global
+
+    # The global probe (modules/secrets.nix), encrypted to the operator key
+    # alone. The box reads its own copy from $file; this one keeps the global
+    # scope exercised for any host added later.
+    if [ ! -f secrets/common.yaml ]; then
+        printf '{"example-global": "unused"}\n' | sops -e --input-type json --output-type yaml \
+            --filename-override secrets/common.yaml /dev/stdin > secrets/common.yaml.tmp
+        mv secrets/common.yaml.tmp secrets/common.yaml
+        echo "Created secrets/common.yaml."
+    fi
 
     just factory-deploy-token
-    echo "Done. Commit .sops.yaml and $file."
+    echo "Done. Commit .sops.yaml, secrets/common.yaml and $file."
 
 # The server pulls deploys from this repository's GitHub deployments and posts
 # the result back, with a fine-grained token of the repository owner: this
 # repository only, Deployments read and write, nothing else. It is root-only on
-# the server, unlike the bot's token. Steps in docs/SOFTWARE-FACTORY.md, step 9.
+# the server, unlike the agents' token. Steps in docs/SOFTWARE-FACTORY.md.
 #
 # Write or renew software-factory's deploy token in its sops file
 factory-deploy-token:
@@ -116,20 +172,14 @@ factory-deploy-token:
     sudo -v
     export SOPS_AGE_KEY_CMD="sudo -n cat /var/lib/sops-age/keys.txt"
 
-    if command -v jq >/dev/null 2>&1; then
-        jq_cmd=(jq)
-    else
-        jq_cmd=(nix run --inputs-from . nixpkgs#jq --)
-    fi
-
-    echo "Your account (not the bot's) > Settings > Developer settings > Fine-grained tokens:"
+    echo "infernowork97 > Settings > Developer settings > Fine-grained tokens:"
     echo "only this nixos repository, permission Deployments: Read and write."
     read -rsp "Deploy token: " value; echo
     case "$value" in
         github_pat_*) ;;
         *) echo "ERROR: expected a fine-grained token (github_pat_...)." >&2; exit 1 ;;
     esac
-    printf '%s' "$value" | "${jq_cmd[@]}" -R . | sops set --value-stdin "$file" '["factory-deploy-token"]'
+    printf '%s' "$value" | jq -R . | sops set --value-stdin "$file" '["factory-deploy-token"]'
     echo "Wrote factory-deploy-token. Commit $file, then deploy."
 
 # The key is pasted from Bitwarden into a shell variable and goes to the server
@@ -154,18 +204,55 @@ factory-restore-age-key:
 
 # ─── Install and deploy ──────────────────────────────────────────────────────
 
-# Replaces whatever runs on a fresh Hetzner server (the stock Ubuntu image, or
-# the rescue system) with NixOS, using nixos-anywhere over root SSH. The age key
-# is pasted from Bitwarden into a private temp directory that nixos-anywhere
-# copies to the new root, and the directory is removed on exit. The system is
-# built on the server: this Mac cannot build x86_64-linux.
+# The install link: the box cabled straight to this machine's ethernet adapter.
+# NetworkManager's "shared" mode makes this machine 10.42.0.1 on that cable,
+# hands the box an address by DHCP and NATs it to the internet through this
+# machine's own connection. The kexec installer finds it again by DHCP too.
 #
-# Install NixOS on a fresh Hetzner server (wipes its disk)
+# Share this machine's network with the box over the cable on <interface>
+factory-link-up $iface:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "$iface" in
+        "" | *[!a-zA-Z0-9_-]*) echo "ERROR: invalid interface name '$iface' (see: ip -br link)" >&2; exit 1 ;;
+    esac
+    nmcli connection delete factory-install-link >/dev/null 2>&1 || true
+    nmcli connection add type ethernet ifname "$iface" con-name factory-install-link \
+        ipv4.method shared ipv6.method link-local connection.autoconnect yes >/dev/null
+    nmcli connection up factory-install-link >/dev/null
+    echo "This machine is 10.42.0.1 on $iface. Leases handed to the box:"
+    echo "  just factory-link-leases"
+
+# Show the addresses the box got over the install link
+factory-link-leases:
+    @ip -4 neigh show | grep '^10\.42\.0\.' || echo "No box seen on 10.42.0.0/24 yet."
+
+# Remove the install link once the box is on Wi-Fi
+factory-link-down:
+    nmcli connection delete factory-install-link
+
+# Replaces the Ubuntu Server on the box with NixOS, using nixos-anywhere over
+# root SSH on the install link (factory-link-up). The box must be on ethernet:
+# nixos-anywhere kexecs into an installer that restores wired networking only,
+# never Wi-Fi. The age key is
+# pasted from Bitwarden into a private temp directory that nixos-anywhere copies
+# to the new root, and the directory is removed on exit. The system is built
+# here, where the caches are warm, and copied over.
+#
+# Install NixOS on the box over its install-link address (wipes its disk)
 factory-install $ip:
     #!/usr/bin/env bash
     set -euo pipefail
     case "$ip" in
         *[!0-9.]* | "") echo "ERROR: expected an IPv4 address, got '$ip'" >&2; exit 1 ;;
+    esac
+
+    # Secure Boot locks the kernel down, and a locked-down kernel refuses to
+    # kexec the unsigned installer - midway, after the age key was pasted.
+    lockdown=$(ssh -o ConnectTimeout=10 "root@$ip" 'cat /sys/kernel/security/lockdown 2>/dev/null || echo "[none]"')
+    case "$lockdown" in
+        *"[none]"*) ;;
+        *) echo "ERROR: the box's kernel is locked down ($lockdown): turn Secure Boot off in its BIOS (F10)." >&2; exit 1 ;;
     esac
 
     extra=$(mktemp -d)
@@ -179,13 +266,16 @@ factory-install $ip:
         exit 1
     }
 
-    nix run --inputs-from . nixpkgs#nixos-anywhere -- \
+    nixos-anywhere \
         --flake .#software-factory \
-        --build-on remote \
+        --build-on local \
         --extra-files "$extra" \
         --target-host "root@$ip"
 
-    echo "Installed. Remove the temporary inbound SSH rule from the Hetzner firewall now."
+    # The installed system has a new host key on the same address.
+    ssh-keygen -R "$ip" >/dev/null 2>&1 || true
+    echo "Installed. Once software-factory shows in the tailnet, unplug the ethernet"
+    echo "cable and check it rejoins over Wi-Fi."
 
 # Deploys the working tree as it is, committed or not. The flake and its inputs
 # are copied to the server's store - content-addressed paths, which need no
@@ -203,7 +293,7 @@ factory-deploy:
         sudo nixos-rebuild switch --flake "$source#software-factory"
 
 # Read-only. Runs as the agent account over Tailscale SSH, so it needs no
-# YubiKey touch and cannot read the system journal; everything it shows is
+# key and cannot read the system journal; everything it shows is
 # visible to that account. The script travels on stdin, so nothing on the
 # server has to be deployed for it to change.
 #
@@ -295,24 +385,21 @@ factory-status $mode="concise":
     main "$1"
     EOF
         status=$?
-        [ "$status" -ne 255 ] || echo "ERROR: could not reach software-factory. Is Tailscale up? (just macos-main-tailscale-up)" >&2
+        [ "$status" -ne 255 ] || echo "ERROR: could not reach software-factory. Is Tailscale up? (tailscale up)" >&2
         exit "$status"
     }
 
-# Fail if rebuilding software-factory would build anything on the expensive-builds denylist.
-factory-cache-check: (_cache-check "factory-cache-check" ".#nixosConfigurations.software-factory.config.system.build.toplevel")
-
 # ─── GitHub and Tailscale ────────────────────────────────────────────────────
 
-# Generates the bot's SSH key on the server, as the agent account, so the
+# Generates the agents' SSH key on the server, as the agent account, so the
 # private half never exists anywhere else. Idempotent: an existing key is kept.
 #
-# Create the bot's SSH key on software-factory and print its public half
+# Create the agents' SSH key on software-factory and print its public half
 factory-gh-key:
     ssh factory@software-factory \
         'test -e ~/.ssh/id_ed25519 || ssh-keygen -q -t ed25519 -N "" -C software-factory -f ~/.ssh/id_ed25519; cat ~/.ssh/id_ed25519.pub'
     @echo ""
-    @echo "Add this key to the bot account TWICE: as an Authentication key and as a"
+    @echo "Add this key to infernowork97 TWICE: as an Authentication key and as a"
     @echo "Signing key (GitHub > Settings > SSH and GPG keys)."
 
 # REPLACES the tailnet policy with tailscale/policy.hujson, after the API has
@@ -342,13 +429,3 @@ tailscale-apply:
     fi
     api "" >/dev/null
     echo "Applied tailscale/policy.hujson."
-
-# ─── macos-main ──────────────────────────────────────────────────────────────
-
-# Connect macos-main to the tailnet (reach software-factory and its previews)
-macos-main-tailscale-up:
-    /Applications/Tailscale.app/Contents/MacOS/Tailscale up
-
-# Disconnect macos-main from the tailnet
-macos-main-tailscale-down:
-    /Applications/Tailscale.app/Contents/MacOS/Tailscale down

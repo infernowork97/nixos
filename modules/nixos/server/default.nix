@@ -1,18 +1,18 @@
-# A headless NixOS server that runs Claude Code agents for one bot account,
+# A headless NixOS server that runs Claude Code agents for one GitHub account,
 # driven from a phone through Remote Control. Imported only by
 # lib.mkNixosServer, so nothing here can reach a desktop host.
 #
 # Two accounts, two trust levels:
 #   myConfig.user - the agent account ("factory"). No sudo. Holds the Claude
-#                   login, the bot's GitHub key and token, and the repositories.
+#                   login, its GitHub key and token, and the repositories.
 #   admin         - wheel, sudo behind a password. Reachable only with the
-#                   hardware keys in myConfig.admin.authorizedKeys, for deploys.
+#                   keys in myConfig.admin.authorizedKeys, for deploys.
 #
 # See docs/adr/0007-software-factory.md for the threat model.
 { lib, ... }:
 {
   imports = [
-    ./hetzner.nix
+    ./omen.nix
     ./users.nix
     ./ssh.nix
     ./tailscale.nix
