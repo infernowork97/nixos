@@ -529,6 +529,9 @@ just factory-deploy        # then the admin password for sudo
   (`factory-ctl crash-log` in a shell **[factory]**). At boot
   `factory-crash-log` copies the dumps `systemd-pstore` kept, root-only,
   under `/var/lib/systemd/pstore`, to `/var/lib/factory-ops/crash`. No dump
-  means the panic left none in pstore.
+  means the panic left none in pstore. A crash or kernel lockup reboots the
+  box by itself after 10s, so a box stuck on a blank screen froze in a way
+  the kernel did not catch. Repeated oopses on bad pointers point at RAM:
+  pick memtest86+ in the boot menu and let it run a few passes.
 - **The box gets hot or loud:** builds use 6 threads at most. Keep the vents
   clear; a laptop stand helps more than any setting.
