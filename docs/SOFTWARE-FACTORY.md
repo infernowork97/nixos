@@ -86,9 +86,9 @@ Copy the key (`tskey-auth-...`) somewhere temporary for step 8.
 ### 4. GitHub **[browser]**, signed in as infernowork97
 
 Agents push as infernowork97 itself (there is no separate bot account). That
-account can merge its own pull requests, so main is guarded by a ruleset and
-the agents' policy denies `gh pr merge`: merging stays your step, in the
-browser.
+account can merge its own pull requests, so main is guarded by a ruleset that
+requires a pull request. Agents merge with `gh pr merge` only when you ask
+them to. Merging deploys nothing: only `/deploy` or the workflow does.
 
 1. **Enable Actions and Dependabot** on `infernowork97/nixos`: **Actions** tab
    > enable workflows; **Settings** > **Code security** > Dependabot version
@@ -368,7 +368,8 @@ a sentence to docs/SOFTWARE-FACTORY.md and open a PR". You should get:
 - a notification with the link when the pull request opens, and another
   when CI is green.
 
-Merge it yourself in the browser: the agent cannot.
+Merge it in the browser, or ask the agent to merge it. It never merges on its
+own.
 
 ---
 
