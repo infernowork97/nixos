@@ -1,7 +1,7 @@
 # NixOS Configuration
 
-A mono-repo that assembles NixOS, nix-darwin and dev-shell configurations for a
-small fleet of personal and work machines from one flake.
+A mono-repo that assembles the `software-factory` NixOS server and the dev
+shells around it from one flake.
 
 ## Language
 

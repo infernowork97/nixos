@@ -2,15 +2,9 @@
   description = "NixOS & dev-shell configuration";
 
   inputs = {
-    # Tracks the *darwin* channel branch, not nixos-26.05. Both fast-forward
-    # along release-26.05, but different Hydra jobsets advance them: the
-    # NixOS/Linux one advances nixos-26.05, the darwin one advances
-    # nixpkgs-26.05-darwin. A rev on nixos-26.05 is only guaranteed to have
-    # *Linux* binaries in cache.nixos.org; darwin coverage is incidental, and a
-    # miss means building Swift and .NET from source for hours.
-    # See docs/adr/0004-darwin-tracks-the-darwin-channel.md before repointing
-    # this, and docs/NON-DARWIN-NIXOS-ISSUES.md for what it costs lenovo-old.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
+    # The only host is x86_64-linux, and a nixos-26.05 rev is the one Hydra
+    # guarantees has Linux binaries in cache.nixos.org.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixvim = {
       url = "github:nix-community/nixvim/nixos-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,21 +21,9 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    lanzaboote = {
-      url = "github:nix-community/lanzaboote/v1.0.0";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-darwin = {
-      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Intentionally NOT following nixpkgs: llm-agents tracks nixpkgs-unstable
     # so we always get the latest claude-code release. flake.lock pins the rev.
     llm-agents.url = "github:numtide/llm-agents.nix";
-    herdr = {
-      url = "github:ogulcancelik/herdr";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Deslop, the architecture linter `just check` runs. Its own flake packages
     # the prebuilt release binaries. See
     # docs/adr/0008-deslop-enforces-the-architecture.md.
@@ -149,19 +131,13 @@
 
       devShells = lib.forAllSystems (pkgs: {
         default = import ./shells/default.nix { inherit pkgs inputs; };
-        nixos-install = import ./shells/nixos-install.nix { inherit pkgs inputs self; };
-        darwin-install = import ./shells/darwin-install.nix { inherit pkgs inputs self; };
+        # The operator machine's tools for installing and running the
+        # software-factory box (docs/SOFTWARE-FACTORY.md).
+        factory-install = import ./shells/factory-install.nix { inherit pkgs; };
       });
 
       nixosConfigurations = {
-        lenovo-old = lib.mkNixosSystem "lenovo-old" "x86_64-linux" { };
         software-factory = lib.mkNixosServer "software-factory" "x86_64-linux";
-        # next-host = lib.mkNixosSystem "next-host" "x86_64-linux" { };
-      };
-
-      darwinConfigurations = {
-        macos-main = lib.mkDarwinSystem "macos-main" "aarch64-darwin" { };
-        macos-work = lib.mkDarwinSystem "macos-work" "aarch64-darwin" { };
       };
     };
 }

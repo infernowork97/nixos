@@ -1,6 +1,6 @@
 # My NixOS (experimental toy project)
 
-Personal nix-darwin / NixOS configuration for macOS-first development. Primary machine runs nix-darwin; there is a secondary NixOS host. Everything is managed with Home Manager.
+NixOS configuration for `software-factory`, a headless HP Omen laptop at home that runs Claude Code agents driven from a phone. Installed and operated from an Ubuntu machine with Nix. Start at [docs/SOFTWARE-FACTORY.md](docs/SOFTWARE-FACTORY.md).
 
 ---
 
@@ -33,30 +33,24 @@ Agent-agnostic configuration shared by every coding agent. `AGENTS.md` holds ins
 **Skills** — `programs/agents/skills/`  
 Agent skills pinned in the flake. Third-party sets are declared as `flake = false` inputs and installed from an explicit allowlist; custom skills are plain `SKILL.md` files under `programs/agents/skills/custom/`. Each Claude flavor relinks `~/.claude/skills` at launch from its own set. `nix flake check` validates every skill's frontmatter.
 
-**Ghostty** — `modules/home/terminal.nix`  
-Terminal with TokyoNight theme, JetBrains Mono Nerd Font, and zsh + Starship + fzf / zoxide / eza / ripgrep.
-
 ---
 
 ## Directory Structure
 
 ```
-flake.nix           — outputs: devShells, nixosConfigurations, darwinConfigurations
-hosts/              — per-host identity (hostname, user)
-  macos-main/       — primary nix-darwin machine
-  macos-work/       — secondary nix-darwin machine
-  lenovo-old/       — legacy NixOS machine
-lib/                — system builder helpers (NixOS, Darwin, dev shells)
+flake.nix           — outputs: devShells, nixosConfigurations, checks
+hosts/
+  software-factory/ — the box's identity, disk layout and size
+lib/                — system builder helpers
 modules/
-  home/             — Home Manager modules (thin wiring into programs/)
-  macos/            — nix-darwin system-level config
-  nixos/            — NixOS system-level config
+  home/             — Home Manager modules (factory/ is the agent account)
+  nixos/server/     — the server's system configuration
 programs/
   nvim/             — NixVim Neovim config (core/, languages/)
   agents/           — agent-agnostic config (AGENTS.md + skill catalog)
-    skills/         — agent skill catalog (custom/ holds committed skills)
   claude-code/      — Claude Code flavors + statusline
-shells/             — dev shells for install workflows
+  software-factory/ — factory-ctl, Remote Control launchers, ops scripts
+shells/             — dev shells (factory-install for the operator machine)
 docs/               — setup and operations guides
 just/               — Justfile recipes
 ```
@@ -67,8 +61,7 @@ just/               — Justfile recipes
 
 | Doc | Purpose |
 |-----|---------|
-| [docs/nix-darwin-install.md](docs/nix-darwin-install.md) | Bootstrap nix-darwin on a new Mac (primary path) |
-| [docs/nixos-install.md](docs/nixos-install.md) | Bootstrap NixOS on bare metal |
+| [docs/SOFTWARE-FACTORY.md](docs/SOFTWARE-FACTORY.md) | Install, use and recover the box |
 | [docs/SOPS.md](docs/SOPS.md) | Secrets management with SOPS + age |
 
 ---
@@ -76,18 +69,8 @@ just/               — Justfile recipes
 ## Common Commands
 
 ```shell
-# Lint Nix files
-just lint
-
-# Format Nix files (nixfmt)
-just format
-
-# Lint + format check + flake check
-just check
-
-# Rebuild and switch (macOS)
-darwin-rebuild switch --flake .#macos-main
-
-# Rebuild and switch (NixOS)
-nixos-rebuild switch --flake .#lenovo-old
+nix develop .#factory-install   # the operator shell
+just check                      # lint + architecture + format + flake check
+just factory-status             # the box's RAM, disk and sessions
+just factory-deploy             # break-glass deploy of the working tree
 ```

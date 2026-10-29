@@ -1,12 +1,6 @@
 set shell := ["bash", "-eo", "pipefail", "-c"]
 
 import 'just/secrets.just'
-import 'just/ssh.just'
-import 'just/nixos/live-iso.just'
-import 'just/nixos/post-boot.just'
-import 'just/nix-darwin/install.just'
-import 'just/nix-darwin/post-install.just'
-import 'just/nix-darwin/cache-check.just'
 import 'just/software-factory.just'
 
 # Show available recipes
@@ -49,7 +43,7 @@ typos-edit:
     set -euo pipefail
     allowlist="$HOME/.config/typos/typos.toml"
     if [ ! -e "$allowlist" ]; then
-        echo "No global allowlist yet — run darwin-rebuild switch to seed it." >&2
+        echo "No global allowlist yet - a Home Manager activation seeds it." >&2
         exit 1
     fi
     nvim "$allowlist"
