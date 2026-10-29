@@ -7,7 +7,7 @@
 #                    that identity to the agent account only.
 # --accept-dns=false: the agent account is barred from 100.64.0.0/10 by
 #                    egress.nix, which includes MagicDNS at 100.100.100.100.
-#                    The box resolves through Hetzner's resolvers instead.
+#                    The box resolves through public resolvers instead (omen.nix).
 #
 # UDP 41641 stays closed: Tailscale still connects through NAT traversal and
 # DERP, with nothing listening on the public interface.

@@ -49,7 +49,4 @@
     # generations a rollback can reach instead of an age cut-off.
     gc.automatic = false;
   };
-
-  # The boot menu offers the same two generations.
-  boot.loader.grub.configurationLimit = 2;
 }

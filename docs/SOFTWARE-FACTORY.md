@@ -1,161 +1,159 @@
 # Software factory runbook
 
-How to stand up, use and recover the `software-factory` server, step by step.
+How to stand up, use and recover the `software-factory` box, step by step.
 The design and its accepted risks are in `docs/adr/0007-software-factory.md`.
+
+The box is an **HP Omen 15-ax005** (i7-6700HQ, 4 cores / 8 threads, 12 GB,
+1 TB SSD) at home on Wi-Fi, lid closed and plugged in. It is installed from
+the **operator machine**, an Ubuntu laptop, with nixos-anywhere over an
+Ubuntu Server that is wiped by the install. Agents work as the GitHub account
+**infernowork97** and are driven from an Android phone through Claude Code
+Remote Control.
 
 Every step is labelled with **where** it runs:
 
 | Label | Where |
 |---|---|
-| **[mac]** | A terminal on macos-main, in this repository's directory |
+| **[operator]** | A terminal on the operator machine, in this repository, inside `nix develop .#factory-install` |
 | **[browser]** | Any browser, signed in to the named website |
-| **[phone]** | The Fold5 |
-| **[factory]** | A shell on the server as `factory` (`ssh factory@software-factory`) |
-| **[admin]** | A shell on the server as `admin` (`ssh -p 2222 admin@software-factory`) |
+| **[phone]** | The Android phone |
+| **[box]** | The Omen's own keyboard and screen, lid open |
+| **[factory]** | A shell on the box as `factory` (`ssh factory@software-factory`) |
+| **[admin]** | A shell on the box as `admin` (`ssh -p 2222 admin@software-factory`) |
 
-`just` recipes always run **[mac]**. Nothing needs to be typed on the server
-until step 13.
-
-Follow the steps in order: each one only needs what the steps before it
-created. Part 1 needs no server at all and ends with CI green; Part 2 creates
-and installs the server.
+`just` recipes always run **[operator]**. Follow the steps in order: each one
+only needs what the steps before it created.
 
 ---
 
-## Part 1 - Accounts, keys and secrets (no server needed)
+## Part 0 - The operator machine (once)
 
-### 1. Hetzner account **[browser]** - start this first
+### 1. Nix and the install shell **[operator]**
 
-Account verification can take from minutes to a day, so start it before
-anything else and carry on with the next steps while it is pending.
-
-1. Sign up at hetzner.com/cloud and complete the verification (identity
-   and/or payment method) it asks for.
-2. Turn on two-factor authentication for the account. Whoever controls it can
-   open the server's web console.
-3. Once verified, create a **project** named `software-factory`.
-4. In that project, open **Servers** > **Add server** without creating
-   anything, and check that **Shared vCPU** > **x86** > **CX43** is offered in
-   Falkenstein or Nuremberg. Hetzner sometimes runs out of stock for a type in
-   one location; note whichever location offers it, and close the page.
-
-### 2. Tailscale on macos-main **[mac]**
-
-1. Check out the `software-factory` branch (or `main`, once it is merged) and
-   rebuild macos-main so the Tailscale app gets installed:
+1. Install Nix with the Determinate installer. It enables flakes by default:
    ```sh
-   just darwin-rebuild macos-main
+   curl -fsSL https://install.determinate.systems/nix | sh -s -- install
    ```
-2. Open **Tailscale** from Applications and allow the VPN configuration and the
-   system extension when macOS asks.
-3. Click **Log in**. Signing in for the first time creates your tailnet: choose
-   the identity provider (Google, GitHub, ...) that should own it, and make
-   sure that account has two-factor authentication, because it is the key to
-   the tailnet.
-4. From now on:
-   - `just macos-main-tailscale-up` connects;
-   - `just macos-main-tailscale-down` disconnects.
+   Open a new terminal afterwards so `nix` is on PATH.
+2. Enter the install shell from this repository. Every later **[operator]**
+   step runs inside it:
+   ```sh
+   cd ~/repo/nixos
+   nix develop .#factory-install
+   ```
+   It brings just, gh, sops, age, mkpasswd, nixos-anywhere and the clipboard
+   tools, all pinned by `flake.lock`.
+3. Tailscale is already installed on this machine. `tailscale up` connects it,
+   `tailscale status` shows the tailnet.
 
-### 3. Tailscale on the phone **[phone]**
+---
 
-1. Install **Tailscale** from Google Play and sign in with the same identity.
-2. Android Settings > Apps > Tailscale > Battery: **Unrestricted**.
+## Part 1 - Accounts, keys and secrets (no box needed)
 
-### 4. Apply the tailnet policy **[browser]** then **[mac]**
+### 2. Apply the tailnet policy **[browser]** then **[operator]**
 
-`tailscale/policy.hujson` becomes your **entire** tailnet policy. It keeps your
-own devices able to reach each other and adds the factory rules. A new tailnet
-only has the default allow-all policy, so nothing is lost. If you customise the
-policy later, compare it first: login.tailscale.com > **Access controls**.
+`tailscale/policy.hujson` becomes your **entire** tailnet policy. It keeps
+your own devices (this machine, the phone) able to reach each other and adds
+the factory rules.
 
-1. **[browser]** login.tailscale.com > **Settings** > **Keys** > **Generate
-   access token**:
-   - description `policy-apply`, expiry **1 day**;
-   - copy the token (it starts with `tskey-api-`). It is shown only once.
-2. **[mac]** Apply the policy and paste the token when asked. The input is
-   hidden.
+1. **[browser]** login.tailscale.com > **Access controls**: check the current
+   policy is still the default allow-all. If you customised it, merge your
+   rules into `tailscale/policy.hujson` first.
+2. **[browser]** **Settings** > **Keys** > **Generate access token**:
+   description `policy-apply`, expiry **1 day**. Copy it (`tskey-api-...`).
+3. **[operator]** Apply the policy and paste the token when asked. It
+   validates first and changes nothing if validation fails.
    ```sh
    just tailscale-apply
    ```
-   It validates first and changes nothing if validation fails.
-3. **[browser]** Back on the **Keys** page, revoke the access token. It is no
-   longer needed.
+4. **[browser]** Revoke the access token.
 
-### 5. Tailscale auth key for the server **[browser]**
+### 3. Tailscale auth key for the box **[browser]**
 
-This must come after step 4: the key needs `tag:factory`, which the policy
+This must come after step 2: the key needs `tag:factory`, which the policy
 defines.
 
-1. login.tailscale.com > **Settings** > **Keys** > **Generate auth key**:
-   - Reusable: **off**
-   - Expiration: **90 days**. It is used once, at the server's first boot, so
-     the install (step 11) must happen before it expires. If it does expire,
-     repeat this step and step 9.
-   - Ephemeral: **off**
-   - Pre-approved: **on**
-   - Tags: **on**, `tag:factory`
-2. Copy the key (`tskey-auth-...`) somewhere temporary. It goes into the
-   encrypted secrets in step 9.
+login.tailscale.com > **Settings** > **Keys** > **Generate auth key**:
 
-### 6. The bot GitHub account **[browser]**
+- Reusable **off**, Ephemeral **off**, Pre-approved **on**;
+- Expiration **90 days**: it is used once, at the box's first boot, so the
+  install (step 12) must happen before it expires. If it does expire, repeat
+  this step and step 8;
+- Tags **on**, `tag:factory`.
 
-1. **Create the bot account** in a private window, with its own email address.
-   Turn on 2FA.
-2. **Invite it to each repository** it should work on, from your own account:
-   - repository > **Settings** > **Collaborators** > **Add people**, role
-     **Write**;
-   - for the `Ivy-Apps` repositories, do the same from the organisation, as an
-     outside collaborator with **Write**.
-3. **Accept the invitations** while signed in as the bot (github.com/notifications).
-4. **Protect `main`** in every one of those repositories:
-   - repository > **Settings** > **Rules** > **Rulesets** > **New branch ruleset**;
-   - target: the default branch; enforcement: **Active**; bypass list: **empty**;
-   - turn on:
-     - **Restrict deletions**;
-     - **Require a pull request before merging**, with 1 required approval;
-     - **Block force pushes**.
-5. **Create the bot's token**, signed in as the bot:
-   - **Settings** > **Developer settings** > **Personal access tokens** >
-     **Tokens (classic)** > **Generate new token (classic)**;
-   - note `software-factory`, expiration of your choice (you redo step 9 when
-     it expires);
-   - scopes: **`repo`**, **`workflow`** and **`read:org`** (`gh pr edit`
-     needs `read:org`);
-   - copy the token (`ghp_...`) somewhere temporary for step 9.
+Copy the key (`tskey-auth-...`) somewhere temporary for step 8.
 
-The bot's SSH key does not exist yet. It is created on the server in step 14.
+### 4. GitHub **[browser]**, signed in as infernowork97
 
-### 7. Claude account settings **[browser]**
+Agents push as infernowork97 itself (there is no separate bot account). That
+account can merge its own pull requests, so main is guarded by a ruleset and
+the agents' policy denies `gh pr merge`: merging stays your step, in the
+browser.
+
+1. **Enable Actions and Dependabot** on `infernowork97/nixos`: **Actions** tab
+   > enable workflows; **Settings** > **Code security** > Dependabot version
+   updates on.
+2. **Protect `main`** in every repository the factory works on, this one
+   first: **Settings** > **Rules** > **Rulesets** > **New branch ruleset**:
+   - target: the default branch; enforcement **Active**; bypass list **empty**;
+   - **Restrict deletions**, **Block force pushes**;
+   - **Require a pull request before merging**, required approvals **0**
+     (GitHub never lets you approve your own pull request).
+3. **The agents' token**: **Settings** > **Developer settings** > **Personal
+   access tokens** > **Tokens (classic)** > **Generate new token (classic)**:
+   - note `software-factory`, expiration of your choice (step 8 again when it
+     expires);
+   - scopes **`repo`**, **`workflow`**, **`read:org`**;
+   - copy it (`ghp_...`) somewhere temporary for step 8.
+4. **The deploy token**: **Settings** > **Developer settings** > **Fine-grained
+   tokens** > **Generate new token**:
+   - name `software-factory-deploy`, expiration up to a year (`factory-ctl
+     status` warns 30 days before it ends);
+   - Repository access: **Only select repositories** > `nixos`;
+   - Permissions: **Deployments: Read and write**, nothing else;
+   - copy it (`github_pat_...`) for step 8.
+
+The box's SSH key does not exist yet. It is created on the box in step 15.
+
+### 5. Claude account settings **[browser]**
 
 claude.ai > **Settings**, signed in with the Max account:
 
-- **Usage** > **Extra usage**: **off**. Reaching the plan limit then pauses the
+- **Usage** > **Extra usage**: **off**. Reaching the plan limit pauses the
   agents instead of billing more.
 - **Account** > **Trusted devices** > **Require trusted devices**: **on**.
-  Every browser or phone that steers a Remote Control session has to enrol.
-  The server enrols itself when it logs in, in step 15.
-- **Connectors** > **GitHub**: **connect** your own GitHub account, and install
-  the Claude GitHub App on every owner the factory works on (your account and
-  `Ivy-Apps`). This is not the bot's token: it is how a session attaches its
-  repository (`add_repo`) and gets woken by CI results and reviews
-  (`subscribe_pr_activity`). Without it agents are never woken by their pull
-  requests.
+  The box enrols itself when it logs in, in step 16.
+- **Connectors** > **GitHub**: connect infernowork97, and install the Claude
+  GitHub App on that account. This is how a session attaches its repository
+  (`add_repo`) and gets woken by CI results and reviews
+  (`subscribe_pr_activity`).
 
-### 8. The server's age key **[mac]**
+### 6. The operator's age key **[operator]**
+
+```sh
+just operator-age-key
+```
+
+1. It asks for your sudo password, then writes a new age key to
+   `/var/lib/sops-age/keys.txt` (root-only) on this machine.
+2. The private key is copied to the clipboard. In Bitwarden create a **Secure
+   note** named `operator-age-key` and paste it.
+3. Press Enter. The clipboard is cleared (after 120 s even without Enter).
+
+This key can edit every secrets file. Its public half goes into `.sops.yaml`.
+
+### 7. The box's age key **[operator]**
 
 ```sh
 just factory-generate-age-key
 ```
 
-1. The private key is copied to the clipboard.
-2. In Bitwarden create a **Secure note** named `software-factory-age-key` and
-   paste the whole clipboard into it: two comment lines, then the
-   `AGE-SECRET-KEY-1...` line.
-3. Press Enter. The clipboard is cleared (after 120 s even without Enter).
+The same flow: save the clipboard in Bitwarden as `software-factory-age-key`
+(two comment lines, then the `AGE-SECRET-KEY-1...` line), press Enter. Only
+its public half is written, into `.sops.yaml`; the install (step 12) asks for
+the private half back.
 
-The recipe writes only the public key into `.sops.yaml`.
-
-### 9. The server's secrets **[mac]**
+### 8. The box's secrets **[operator]**
 
 ```sh
 just factory-secrets
@@ -163,153 +161,139 @@ just factory-secrets
 
 It asks, in order, for:
 
-1. **Your Mac's sudo password**: to read your existing age key, the one that
-   can edit every secrets file.
+1. **Your sudo password**, to read the operator key from step 6.
 2. **A new admin password**, typed twice. Save it in Bitwarden as
-   `software-factory-admin-password`. You need it:
-   - for every deploy (sudo);
-   - for the Hetzner web console if the tailnet is ever down.
-3. **The Tailscale auth key** from step 5.
-4. **The bot token** from step 6.
-5. **The deploy token**, a fine-grained token of **your own** account, never
-   the bot's. It is what lets the server read and report this repository's
-   deployments (Part 4):
-   - [browser, as you] github.com > Settings > Developer settings >
-     Fine-grained tokens > **Generate new token**;
-   - name `software-factory-deploy`, expiration up to a year (`factory-ctl
-     status` warns 30 days before it expires);
-   - Repository access: **Only select repositories** > this `nixos` repository;
-   - Permissions: **Deployments: Read and write**. Nothing else; Metadata:
-     Read-only is added by GitHub on its own.
+   `software-factory-admin-password`. You need it for every break-glass deploy
+   (sudo) and at the box's own keyboard if the tailnet is ever down.
+3. **The Tailscale auth key** from step 3.
+4. **The agents' token** from step 4.3.
+5. **The Wi-Fi SSID and password**. Both are secret: the repository is public
+   and an SSID locates the house.
+6. **The deploy token** from step 4.4. `just factory-deploy-token` renews this
+   one secret on its own later.
 
-   `just factory-deploy-token` writes or renews this one secret on its own.
-
-Then commit and push, so the flake can see the new file. This is what makes
-the PR's `just check` pass: until this file exists, evaluating the
-software-factory host fails on purpose, because the host declares secrets that
-must be in it.
+Then commit to the pull request's branch, so the flake can see the files.
+Until `secrets/hosts/software-factory.yaml` exists, evaluating the host fails
+on purpose:
 
 ```sh
-git switch software-factory   # the branch of the open PR, or main once merged
 git add .sops.yaml secrets/hosts/software-factory.yaml
-git commit -m "[software-factory] Add the server's secrets"
+git commit -m "[software-factory] Add the box's secrets"
 git push
 ```
 
-You can now delete the temporary copies of the auth key and the bot token.
+Delete the temporary copies of the tokens.
 
 ---
 
-## Part 2 - Create and install the server (about 1 hour, once)
+## Part 2 - Prepare and install the box (about 1 hour, once)
 
-### 10. Create the server **[browser]**
+### 9. Firmware settings **[box]**
 
-console.hetzner.com, in the `software-factory` project from step 1.
+Power on and press **F10** for the BIOS setup:
 
-1. **Security** > **SSH keys** > **Add SSH key**: paste the output of this
-   command, run **[mac]**:
+- **Secure Boot: off**, legacy/CSM support off, so it boots UEFI only.
+  NixOS uses unsigned systemd-boot, and Secure Boot's kernel lockdown would
+  also block the `kexec` that nixos-anywhere relies on.
+- Boot order: USB first for the next step.
+- If offered, enable **power on after AC loss**, so the box comes back by
+  itself after a power cut drains the battery.
+
+### 10. Ubuntu Server **[box]** then **[operator]**
+
+Ubuntu is only the vehicle for nixos-anywhere: the install wipes it.
+
+1. **[box]** Plug the **ethernet cable** into the router: the install needs a
+   wired link (step 12). Install **Ubuntu Server 26.04** from a USB stick, with
+   **Install OpenSSH server** ticked. Any user name will do.
+2. **[box]** After the reboot, note the LAN address from `ip -4 addr`.
+3. **[operator]** Give root your key, which nixos-anywhere logs in with:
    ```sh
-   cat ~/.ssh/id_ed25519_sk.pub
+   ssh-copy-id <user>@<lan-ip>
+   ssh -t <user>@<lan-ip> 'sudo install -d -m 700 /root/.ssh && sudo cp ~/.ssh/authorized_keys /root/.ssh/'
+   ssh root@<lan-ip> true   # must succeed without a password
    ```
-   This key is used only for the first root login during the install.
-2. **Firewalls** > **Create firewall**, named `software-factory`:
-   - inbound: one rule, TCP port **22**, source: **your current IP address**.
-     This rule is temporary and is removed in step 12.
-   - outbound: no rules, which allows all traffic.
-3. **Servers** > **Add server**:
-   - Location: Falkenstein or Nuremberg.
-   - Image: **Ubuntu 24.04**. It is wiped by the install.
-   - Type: **Shared vCPU** > **x86** > **CX33** (4 vCPU / 8 GB, what the host
-     is sized for today) or **CX43** (8 vCPU / 16 GB). Set
-     `myConfig.factory.size` in `hosts/software-factory/configuration.nix` to
-     match before step 11 - `small` for 2 vCPU / 4 GB (e.g. CPX22), `medium`
-     for 4 vCPU / 8 GB, `standard` for 8 vCPU / 16 GB.
-   - Networking: **Public IPv4 on**. GitHub has no IPv6, so it is required.
-     IPv6 is optional.
-   - SSH keys: the key you added above.
-   - Firewalls: `software-factory`.
-   - Backups: off.
-   - Name: `software-factory`.
-4. Copy the server's **public IPv4 address** from its overview page.
 
-If Hetzner refuses the hardware-key format, use a throwaway key for
-the install instead **[mac]**, and delete both copies of it after step 11:
+### 11. Pin the disk, then merge **[operator]** then **[browser]**
+
+1. Read the SSD's stable id:
+   ```sh
+   ssh root@<lan-ip> 'lsblk -d -o NAME,SIZE,MODEL,TRAN; ls -l /dev/disk/by-id/ | grep -v part'
+   ```
+   Pick the 1 TB disk's `ata-...` (SATA) or `nvme-...` entry, not a `wwn-`
+   or `nvme-eui.` alias, and put it in `hosts/software-factory/disk-config.nix`
+   as `device = "/dev/disk/by-id/<id>";`. Commit and push.
+2. **[browser]** Wait for the pull request's `check` to go green, then merge
+   it, and pull `main` here: `git switch main && git pull`.
+
+### 12. Install NixOS **[operator]**
+
+From `main`, with the ethernet cable still plugged in:
 
 ```sh
-ssh-keygen -t ed25519 -N "" -f /tmp/hetzner-install
-ssh-add /tmp/hetzner-install
-cat /tmp/hetzner-install.pub   # paste this into Hetzner instead
+just factory-install <lan-ip>
 ```
 
-### 11. Install NixOS **[mac]**
-
-```sh
-just factory-install <server-ipv4>
-```
-
-1. Confirm the host key prompt with `yes`. The YubiKey blinks: touch it,
-   possibly several times during the install.
-2. When asked, paste the `software-factory-age-key` note from Bitwarden, then
-   press **Ctrl-D** on an empty line.
-3. Wait. The installer:
-   - boots NixOS over Ubuntu and wipes the disk;
-   - builds the system on the server, which on the current nixpkgs pin
-     includes compiling Node.js: plan on **30-60 minutes**;
-   - reboots.
-4. About a minute after the reboot, the server joins the tailnet by itself with
+1. Paste the `software-factory-age-key` note from Bitwarden, then press
+   **Ctrl-D** on an empty line.
+2. Wait. nixos-anywhere kexecs the box into an in-memory NixOS installer,
+   wipes the disk, builds the system **here** and copies it over, installs it
+   and reboots. 20-40 minutes, mostly downloads.
+3. About a minute after the reboot, the box joins the tailnet by itself with
    the auth key. Check login.tailscale.com > **Machines**: `software-factory`,
    tagged `tag:factory`.
 
-### 12. Close the public port **[browser]**
+### 13. Move it to Wi-Fi **[box]**
 
-console.hetzner.com > **Firewalls** > `software-factory`: delete the inbound
-TCP 22 rule. Leave the firewall attached with no inbound rules. NixOS keeps the
-public interface closed even without it; this is the second layer.
+1. **Unplug the ethernet cable.** NetworkManager joins the Wi-Fi from the
+   `wifi-env` secret; within a minute the box is reachable over the tailnet
+   again (`tailscale ping software-factory` from the operator machine).
+2. Close the lid and put it somewhere ventilated, plugged in. Lid close and
+   sleep are disabled, so it keeps running.
 
-From here on, the server is reachable only over the tailnet.
+If it does not come back, see [Troubleshooting](#troubleshooting).
 
-### 13. Check both ways in **[mac]**
+### 14. Check both ways in **[operator]**
 
 ```sh
-just macos-main-tailscale-up
-ssh -p 2222 admin@software-factory   # YubiKey touch; you get a shell, then exit
+tailscale up
+ssh -p 2222 admin@software-factory   # your ~/.ssh/id_ed25519; you get a shell, then exit
 ssh factory@software-factory         # Tailscale SSH: no key, no password; then exit
 ```
 
-Accept each host key with `yes` the first time. If either fails, see
-[Troubleshooting](#troubleshooting).
+Accept each host key with `yes` the first time. The Ubuntu install left an
+old host key for the LAN address in `~/.ssh/known_hosts`; remove it with
+`ssh-keygen -R <lan-ip>`.
 
-### 14. Give the bot its SSH key **[mac]** then **[browser]**
+### 15. Give the box its GitHub key **[operator]** then **[browser]**
 
 ```sh
 just factory-gh-key
 ```
 
-This creates the key on the server and prints its public half
-(`ssh-ed25519 ... software-factory`). Signed in **as the bot**:
+This creates the key on the box and prints its public half
+(`ssh-ed25519 ... software-factory`). Signed in as **infernowork97**:
 
-1. github.com > **Settings** > **SSH and GPG keys** > **New SSH key**:
-   - title `software-factory`, key type **Authentication Key**, paste the key.
-2. **New SSH key** again with the same key, key type **Signing Key**. This is
-   what makes the bot's commits show as Verified.
+1. github.com > **Settings** > **SSH and GPG keys** > **New SSH key**: title
+   `software-factory`, key type **Authentication Key**, paste.
+2. **New SSH key** again with the same key, key type **Signing Key**, so the
+   agents' commits show as Verified.
 
-### 15. Log in to Claude on the server **[factory]**
+### 16. Log in to Claude on the box **[factory]**
 
 ```sh
 ssh factory@software-factory
 claude-factory
 ```
 
-1. Claude Code starts its first-run setup. Choose **Claude account with
-   subscription**, not an API key: the server refuses API keys anyway.
-2. It prints a URL. Open it in the browser on your Mac **[browser]**, approve,
-   then copy the code it shows and paste it back into the terminal.
-3. If it asks whether to trust the home directory, answer yes. That prompt is
-   only for this interactive run.
-4. Type `/status` and check that the login method is your claude.ai Max account.
-5. `/exit`.
+1. Choose **Claude account with subscription**, not an API key: the box
+   refuses API keys anyway.
+2. Open the URL it prints in a browser on the operator machine, approve, and
+   paste the code back.
+3. If it asks whether to trust the home directory, answer yes.
+4. `/status` shows your claude.ai Max account. `/exit`.
 
-Then, still **[factory]**, start every repository's Remote Control server:
+Then start every repository's Remote Control server:
 
 ```sh
 systemctl --user restart factory-repos
@@ -317,59 +301,50 @@ systemctl --user list-units 'claude-rc@*'   # one running unit per repository
 exit
 ```
 
-The declared repositories (`nixos`, `deslop`, `haskell-template`) are cloned
-into `~/repos` using the bot's key from step 14.
+The declared repository (`nixos`) is cloned into `~/repos` with the key from
+step 15.
 
-### 16. Connect the phone **[phone]**
+### 17. Connect the phone **[phone]**
 
-1. Open the **Claude** app, sign in, and go to **Code**. If Trusted Devices
-   asks, enrol the phone (fingerprint or face).
-2. Android Settings > Apps > Claude > Battery: **Unrestricted**, so
-   notifications arrive. Two kinds reach the phone, both through the Claude app:
-   - **needs your input**: sent by the app itself when an agent asks a
-     question or waits on a permission prompt;
-   - **agent-sent**: the factory instructions tell agents to call
-     `PushNotification` when they open a PR (with its link), when the work is
-     done (CI green), when they are blocked on a plain-text question, or when
-     they hit a failure they cannot fix.
+1. Tailscale is already on the phone and signed in to the same tailnet.
+   Android Settings > Apps > Tailscale > Battery: **Unrestricted**.
+2. Open the **Claude** app, sign in, go to **Code**. Enrol the phone if
+   Trusted Devices asks.
+3. Android Settings > Apps > Claude > Battery: **Unrestricted**, so
+   notifications arrive. Two kinds reach the phone:
+   - **needs your input**: an agent asks a question or waits on a permission
+     prompt;
+   - **agent-sent**: agents call `PushNotification` when they open a pull
+     request, when CI is green, when blocked, or on a failure they cannot fix.
 
    These are the **Push when actions required** and **Push when Claude
    decides** toggles in `/config` of any interactive `claude` signed in to the
-   same account. They are account-wide preferences on the server, so if
-   agent-sent pushes never arrive, check the second one is on. Android delivery has an open bug
-   ([claude-code#87003](https://github.com/anthropics/claude-code/issues/87003)):
-   if pushes stop arriving, the fallback is Claude Code hooks posting to ntfy.sh
-   (#194).
-3. You should see an `admin` server, and one Remote Control server per
-   repository, named after it.
-4. For SSH from the phone (recovery, Part 5): install **Termux**
-   from F-Droid, then in Termux:
-   ```sh
-   pkg install openssh
-   ssh factory@software-factory
-   ```
-   No key is needed: Tailscale SSH authenticates the phone's tailnet identity.
+   same account. If agent-sent pushes never arrive, check the second one.
+4. You should see an `admin` server and a `nixos` server.
+5. For SSH from the phone (Part 5): install **Termux** from F-Droid, then
+   `pkg install openssh` and `ssh factory@software-factory`. Tailscale SSH
+   authenticates the phone's tailnet identity, so no key is needed.
 
-### 17. First end-to-end test **[phone]**
+### 18. First end-to-end test **[phone]**
 
-Open the `deslop` server, start a session, and ask for something small: "add a
-sentence to the README and open a PR". You should get:
+Open the `nixos` server, start a session, and ask for something small: "add
+a sentence to docs/SOFTWARE-FACTORY.md and open a PR". You should get:
 
-- a branch pushed and a pull request opened by the bot, with Verified commits;
-- a notification on the phone if the agent asks you anything, one with the
-  link when the pull request is opened, and another when CI is green, sent
-  after the CI result woke the agent.
+- a branch pushed and a pull request opened by infernowork97, with Verified
+  commits;
+- a notification with the link when the pull request opens, and another
+  when CI is green.
+
+Merge it yourself in the browser: the agent cannot.
 
 ---
 
 ## Part 3 - Daily use
 
-- **Start work [phone]:** Claude app > Code > pick the repository's server >
-  new session, e.g. `/grill-me`. Each session works in its own git worktree, so
-  two sessions in one repository do not collide. Up to 3 sessions per
-  repository.
-- **Run the box [phone]:** open the `admin` server and start a session. It is
-  always on, and its skills cover the day-to-day:
+- **Start work [phone]:** Claude app > Code > the repository's server > new
+  session, e.g. `/grill-me`. Each session works in its own git worktree. Up
+  to 3 sessions per repository.
+- **Run the box [phone]:** open the `admin` server and start a session:
 
   | Skill | Does |
   |---|---|
@@ -384,30 +359,31 @@ sentence to the README and open a PR". You should get:
   | `/reboot`, `/gc` | root operations through fixed units |
 
   The skills drive `factory-ctl`, which works the same in a shell
-  **[factory]** (`factory-ctl help`). Anything that would end live sessions or
-  touches worktrees with local work asks first.
-- **Add a repository [phone]:** `/start-repo <name>` in the admin server.
-  - Invite the bot to that repository first (step 6.2). A bare name is looked
-    up among the repositories the bot can see, and the agent asks you to
-    confirm which one.
-  - The new server appears in the app within seconds.
-  - **Private repositories are only ever added this way, never in Nix.** This
-    repository is public.
-- **Preview an app [phone or mac]:** agents bind dev servers to ports
-  3000-3099 and tell you which one. Open `http://software-factory:<port>`, on
-  the Mac with Tailscale up.
-- **Status [mac]:** `just factory-status` prints RAM and disk used and each
-  repository's server with its open sessions. `just factory-status detailed`
-  adds recent branches, the last hour's errors and the processes using the
-  most memory. Needs Tailscale up, nothing else.
-- **Logs [factory]:**
-  - `journalctl --user -u claude-rc@<repo> -e` for one repository's server;
-  - `journalctl -u factory-deploy -e` for deploys (`factory` can read the
-    system journal).
+  **[factory]** (`factory-ctl help`).
+- **Add a repository [phone]:** `/start-repo <name>` in the admin server. Add
+  the `main` ruleset from step 4.2 to it first. **Private repositories are
+  only ever added this way, never in Nix**: this repository is public.
+- **Preview an app:** agents bind dev servers to ports 3000-3099 and say
+  which. Open `http://software-factory:<port>` on the phone or the operator
+  machine, with Tailscale up.
+- **Status [operator]:** `just factory-status`, or `just factory-status
+  detailed` for recent branches, the last hour's errors and the top memory
+  users.
+- **Logs [factory]:** `journalctl --user -u claude-rc@<repo> -e` for one
+  repository's server; `journalctl -u factory-deploy -e` for deploys.
 - **Remove a repository for good [factory]:** `/stop-repo` it, then
   `rm -rf ~/repos/<repo>`.
 
-## Part 4 - Changing the server (deploy)
+### Sizing
+
+`myConfig.factory.size = "medium"` is tuned for the Omen
+(`modules/nixos/server/resources.nix`): the agents' slice is capped at 9 GB
+(soft) / 9.5 GB (hard), Nix builds at 5 / 6 GB on 6 of the 8 threads, one at a
+time, so a deploy leaves the agents two threads. zram and an 8 GiB swapfile
+absorb the overlap. The store collects garbage when free disk drops below
+20 GiB.
+
+## Part 4 - Changing the box (deploy)
 
 Change the configuration with a pull request, merge it, then deploy `main`:
 
@@ -416,85 +392,94 @@ Change the configuration with a pull request, merge it, then deploy `main`:
 
 What happens:
 
-1. The workflow refuses unless `check` and `cache-guard` passed on main's tip,
-   then creates a GitHub deployment for that commit. GitHub holds no credential
-   to the server.
-2. Within a minute the server sees it, checks the commit is still the tip of
-   `main`, and builds it - on the server, with all of its cores.
+1. The workflow refuses unless `check` passed on main's tip, then creates a
+   GitHub deployment for that commit. GitHub holds no credential to the box.
+2. Within a minute the box sees it, checks the commit is still the tip of
+   `main`, and builds it itself.
 3. It activates the new system and checks it can still be reached: Tailscale
    up, sshd running, GitHub answering. If not, it switches straight back.
    Only a healthy system becomes the boot default.
 4. The result is posted to the deployment (the repository's Environments page)
    and shown by `/status`.
 
-- **Live sessions keep running.** Remote Control servers, the admin's
-  included, are not restarted by a deploy. `/restart-repo` applies a new agent
-  setup to a repository; a reboot applies it everywhere.
+- **Live sessions keep running.** `/restart-repo` applies a new agent setup to
+  a repository; a reboot applies it everywhere.
 - **Roll back:** `/deploy rollback` returns to the previous generation. Only two
-  are kept.
+  are kept, and the boot menu offers the same two.
 - **Nothing deploys on merge.** Only the workflow or `/deploy` does.
 
-### Break glass **[mac]**
+### Break glass **[operator]**
 
 When GitHub or the deploy path itself is broken, deploy the working tree
 directly, committed or not, any branch:
 
 ```sh
-just macos-main-tailscale-up
-just factory-cache-check   # warns if this nixpkgs rev would compile something expensive
-just factory-deploy        # YubiKey touch, then the admin password for sudo
+tailscale up
+just factory-deploy        # then the admin password for sudo
 ```
 
 ## Part 5 - Recovery
 
 - **Tailnet unreachable:**
-  - [browser] console.hetzner.com > the server > **Console** opens a web
-    terminal;
-  - log in as `admin` with `software-factory-admin-password`;
-  - then `sudo systemctl status tailscaled`, and `sudo tailscale up` if it is
-    logged out.
-- **Server reinstalled from scratch:**
-  - repeat step 5 (new auth key), then `just factory-secrets` (it overwrites);
-  - commit, and repeat steps 10 to 15.
-  - The age key stays the same: it is in Bitwarden.
-- **Age key missing on a running server [mac]:** `just factory-restore-age-key`,
-  then `just factory-deploy`.
-- **Bot token expired:** create a new one (step 6.5), run
-  `just factory-secrets`, commit, and `just factory-deploy`.
-- **Deploy token expired or expiring:** create a new one (step 9.5), run
+  - [box] open the lid, log in as `admin` with
+    `software-factory-admin-password`;
+  - `nmcli device status` and `journalctl -u NetworkManager -e` for Wi-Fi;
+    `sudo systemctl status tailscaled`, and `sudo tailscale up` if it is
+    logged out;
+  - plugging the ethernet cable back in always gives a working link.
+- **Wi-Fi password changed:** plug in the ethernet cable, run
+  `just factory-secrets` (it overwrites everything, so have the other values at
+  hand) or `just edit-secrets software-factory` to change `wifi-env` alone,
+  commit, merge, and deploy.
+- **Box reinstalled from scratch:**
+  - repeat step 3 (new auth key) and step 8;
+  - commit, and repeat steps 10 and 12 to 16.
+  - The age keys stay the same: they are in Bitwarden.
+- **Age key missing on a running box [operator]:**
+  `just factory-restore-age-key`, then `just factory-deploy`.
+- **Operator machine lost:** on the new one, do Part 0, then put the
+  `operator-age-key` note from Bitwarden at `/var/lib/sops-age/keys.txt`
+  (root, mode 600) and add a new admin key to
+  `hosts/software-factory/configuration.nix`, deployed from the phone.
+- **Agents' token expired:** create a new one (step 4.3), run
+  `just factory-secrets`, commit, merge, and `/deploy`.
+- **Deploy token expired or expiring:** create a new one (step 4.4), run
   `just factory-deploy-token`, commit, and `just factory-deploy` - the old
   token cannot report the deploy that replaces it.
 - **Admin server not answering [factory]:**
-  `systemctl --user restart claude-rc-admin`. It restarts on its own after a
-  crash, so this is for a server that is up but wedged.
-- **Suspected compromise:** do all of these, then reinstall from scratch with a
-  new age key, auth key and bot token:
-  - [browser, as the bot] delete its SSH keys and token;
-  - [browser] claude.ai > Settings > Account: remove the server from Trusted
+  `systemctl --user restart claude-rc-admin`.
+- **Suspected compromise:** do all of these, then reinstall from scratch with
+  new age keys, auth key and tokens:
+  - [browser, as infernowork97] delete the `software-factory` SSH keys and
+    both tokens;
+  - [browser] claude.ai > Settings > Account: remove the box from Trusted
     devices and sign out of all sessions;
   - [browser] login.tailscale.com > Machines: remove `software-factory`.
 
 ## Troubleshooting
 
-- **`ssh factory@software-factory` asks for a password or is refused:**
-  - check that the policy from step 4 is applied;
-  - check that the server shows `tag:factory` in Machines.
+- **nixos-anywhere hangs after "kexec":** the box lost its network. It must
+  be on ethernet (step 10), and Secure Boot must be off (step 9). Power-cycle
+  it back into Ubuntu and retry.
+- **No Wi-Fi after unplugging ethernet [box]:** `nmcli connection show
+  home-wifi` must exist; if not, `journalctl -u NetworkManager-ensure-profiles
+  -e`. A wrong SSID or password means rewriting `wifi-env` (Part 5). The card
+  is an Intel one and its firmware ships with
+  `hardware.enableRedistributableFirmware`.
+- **`ssh factory@software-factory` asks for a password or is refused:** check
+  that the policy from step 2 is applied and the box shows `tag:factory` in
+  Machines.
 - **`ssh -p 2222 admin@...` times out:** port 2222 is reachable only over the
-  tailnet. Run `just macos-main-tailscale-up` first.
+  tailnet. Run `tailscale up` first.
 - **`systemctl --user` says "Failed to connect to bus" [factory]:** run
   `export XDG_RUNTIME_DIR=/run/user/$(id -u)` and retry.
-- **A repository's server keeps restarting [factory]:** read its log with
-  `journalctl --user -u claude-rc@<repo> -e`. The usual causes:
-  - **not logged in:** repeat step 15;
-  - **"Workspace not trusted":** restart the unit, which re-writes the trust
-    record.
-- **Agents say `add_repo` or `subscribe_pr_activity` was refused:**
-  - "link your GitHub account": redo the GitHub connector in step 7;
-  - "not configured for this session" on a repository `list_repos` does not
-    show: the Claude GitHub App is not installed on that owner, or not granted
-    that repository.
-- **Clones fail [factory]:**
-  - test the bot's access with `ssh -T git@github.com`. It should greet the bot
-    by name;
-  - if not, redo step 14, and make sure the bot accepted the repository
-    invitation.
+- **A repository's server keeps restarting [factory]:** read
+  `journalctl --user -u claude-rc@<repo> -e`. Usually: **not logged in**
+  (repeat step 16), or **"Workspace not trusted"** (restart the unit).
+- **Agents say `add_repo` or `subscribe_pr_activity` was refused:** redo the
+  GitHub connector in step 5, and check the Claude GitHub App is granted that
+  repository.
+- **Clones fail [factory]:** `ssh -T git@github.com` should greet
+  infernowork97; if not, redo step 15.
+- **The box gets hot or loud:** builds use 6 threads at most. Keep the vents
+  clear; a laptop stand helps more than any setting.

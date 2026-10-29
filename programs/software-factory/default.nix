@@ -35,6 +35,10 @@ let
         "Bash(git push * main:*)"
         "Bash(git push * HEAD:main)"
         "Bash(git push --force *)"
+        # Agents push as the operator's own account, which a ruleset cannot
+        # stop from merging its own pull requests. Merging stays a human step.
+        "Bash(gh pr merge)"
+        "Bash(gh pr merge *)"
         "Read(~/.claude/.credentials.json)"
         "Read(~/.ssh/id_*)"
         "Read(//run/secrets/**)"

@@ -32,6 +32,10 @@ let
       ok = policy.permissions.defaultMode == "auto";
       msg = "sessions must start in auto mode";
     }
+    {
+      ok = lib.elem "Bash(gh pr merge *)" policy.permissions.deny;
+      msg = "gh pr merge must be denied: agents push as the operator's account";
+    }
   ];
   failedPolicy = lib.filter (a: !a.ok) policyAssertions;
 

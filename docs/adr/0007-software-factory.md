@@ -189,3 +189,31 @@ and taking no input (`modules/nixos/server/ops.nix`):
   root, systemd-tmpfiles ages `/tmp` out after three days,
   and an hourly check starts `factory-gc` whenever less than 10% of `/` is
   free.
+
+## Amendment: a laptop at home, no bot account (2026-10)
+
+The box moved from a Hetzner CX33 to an HP Omen 15-ax005 laptop on a home
+network, and the repository changed owner. What changed, and what it costs:
+
+- **Hardware.** `hetzner.nix` became `omen.nix`: systemd-boot on UEFI, lid and
+  sleep disabled, the dGPU unused. There is no cloud firewall; the second layer
+  is the home router's NAT, and NixOS still opens nothing on the LAN
+  interface. Recovery is the laptop's own keyboard instead of a web console.
+- **Network.** Wi-Fi through NetworkManager, with both SSID and password in
+  sops because an SSID geolocates the house. DNS is pinned to public resolvers:
+  the egress rules bar the agent account from private ranges, which a home
+  router's resolver sits in. The install needs ethernet, because the
+  nixos-anywhere kexec image restores wired networking only.
+- **No bot account.** Agents push as the owner's secondary account,
+  infernowork97. The ruleset on `main` can no longer require an approval
+  (nobody can approve their own pull request), so it requires a pull request
+  with zero approvals, and the managed policy denies `gh pr merge`. Like the
+  other deny rules, that is a backstop against the obvious form, not a
+  boundary: an agent with the token could merge through the API. Accepted,
+  because the account is a throwaway and deploys still need a human
+  `/deploy` or workflow run.
+- **Admin key.** The operator machine's plain ed25519 key replaces the
+  YubiKeys. Port 2222 is reachable only over the tailnet, and sudo still needs
+  the admin password.
+- **Size.** `medium` was retuned for 4 cores / 8 threads / 12 GB.
+

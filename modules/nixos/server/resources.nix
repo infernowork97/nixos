@@ -28,23 +28,26 @@ let
       };
     };
 
-    # 4 vCPU, 8 GB, 80 GB disk (e.g. Hetzner CX33). One build at a time on all
-    # four cores; the agents get most of the memory, since idle Remote Control
-    # servers cost about 70 MB each and a live session about 250 MB.
+    # 4 cores / 8 threads, 12 GB, 1 TB disk (the HP Omen 15-ax005). One build
+    # at a time on six threads, leaving two for the agents so a deploy does not
+    # stall live sessions; the agents get most of the memory, since idle Remote
+    # Control servers cost about 70 MB each and a live session about 250 MB.
+    # The caps overcommit RAM together, as `standard` does: zram and the
+    # swapfile absorb the overlap, and oomd picks the victim.
     medium = {
       agents = {
-        high = "5G";
-        max = "5632M";
+        high = "9G";
+        max = "9728M";
       };
       builds = {
-        high = "4G";
-        max = "5G";
+        high = "5G";
+        max = "6G";
         jobs = 1;
-        cores = 4;
+        cores = 6;
       };
       disk = {
-        minFree = 8;
-        maxFree = 20;
+        minFree = 20;
+        maxFree = 60;
       };
     };
 
@@ -75,8 +78,8 @@ in
     type = lib.types.enum (lib.attrNames sizes);
     description = ''
       The machine the server runs on, which sets its memory, build and disk
-      limits. `small` is 2 vCPU / 4 GB, `medium` 4 vCPU / 8 GB, `standard` 8 vCPU /
-      16 GB.
+      limits. `small` is 2 vCPU / 4 GB, `medium` 4 cores / 8 threads / 12 GB (the
+      HP Omen), `standard` 8 vCPU / 16 GB.
     '';
   };
 

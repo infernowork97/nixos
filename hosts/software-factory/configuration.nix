@@ -5,34 +5,31 @@
   networking.hostName = "software-factory";
 
   myConfig = {
-    # The agent account commits as the bot, which has write access to the
-    # repositories but cannot merge into their protected main branches.
+    # The agent account commits as infernowork97, a secondary account kept for
+    # the factory. main is guarded by a ruleset (pull request required, no force
+    # pushes, no deletion) and agents are barred from `gh pr merge`.
     user = {
       name = "factory";
-      fullName = "IvyBot";
-      email = "93778811+ivywallet@users.noreply.github.com";
+      fullName = "infernowork97";
+      email = "263571817+infernowork97@users.noreply.github.com";
     };
 
-    # macos-main's YubiKey-backed keys, primary and backup.
+    # The operator machine's key.
     admin.authorizedKeys = [
-      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIE7xT+rb5Xcz31HAjh0peMajLeY1CBdI/0dYAj1zrrB6AAAADnNzaDptYWNvcy1tYWlu"
-      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIKrxuyp7hrI5IKNj7wltctEH6L7EUqqbgr/ePF/OYjy7AAAADnNzaDptYWNvcy1tYWlu"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKhYu/b/3+boevsZiit1clWpwborD4noSkkbOQvBTBg1 operator"
     ];
 
     factory = {
-      # Hetzner CX33 (4 vCPU, 8 GB). Switch to "standard" on an 8 vCPU / 16 GB
-      # machine.
+      # HP Omen 15-ax005 (4 cores / 8 threads, 12 GB).
       size = "medium";
 
       # Deploys are pulled from this repository (modules/nixos/server/ops.nix).
-      deploy.repo = "ILIYANGERMANOV/nixos";
+      deploy.repo = "infernowork97/nixos";
 
       # Public repositories only - private ones are added on the box with
       # `factory-ctl start` and never named here.
       repos = {
-        nixos = "git@github.com:ILIYANGERMANOV/nixos.git";
-        deslop = "git@github.com:Ivy-Apps/deslop.git";
-        haskell-template = "git@github.com:Ivy-Apps/haskell-template.git";
+        nixos = "git@github.com:infernowork97/nixos.git";
       };
     };
 

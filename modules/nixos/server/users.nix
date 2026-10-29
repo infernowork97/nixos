@@ -13,7 +13,7 @@ in
   options.myConfig.admin.authorizedKeys = lib.mkOption {
     type = lib.types.listOf lib.types.str;
     description = ''
-      Public SSH keys allowed to log in as `admin`. Hardware-backed keys only:
+      Public SSH keys allowed to log in as `admin`. Prefer hardware-backed keys:
       admin is the one account that can become root.
     '';
   };
@@ -48,8 +48,9 @@ in
       };
     };
 
-    # The admin password. sudo asks for it, and so does the Hetzner web console,
-    # which is the way back in when the tailnet is down. sshd never accepts it.
+    # The admin password. sudo asks for it, and so does the laptop's own console
+    # (open the lid), which is the way back in when the tailnet is down. sshd
+    # never accepts it.
     myConfig.secrets.password-hash.neededForUsers = true;
 
     security.sudo = {

@@ -3,7 +3,7 @@
 # Port 22 on the tailnet address belongs to Tailscale SSH (tailscale.nix), which
 # intercepts it before the kernel sees the packet, so sshd listens on 2222. The
 # port is opened on tailscale0 alone: on the public interface nothing is open,
-# whatever the Hetzner cloud firewall says.
+# on the home LAN included.
 _:
 let
   port = 2222;
@@ -18,7 +18,7 @@ in
       PermitRootLogin = "no";
       PasswordAuthentication = false;
       KbdInteractiveAuthentication = false;
-      # admin authenticates with a hardware key on the client. Forwarding the
+      # admin authenticates with a key on the operator machine. Forwarding the
       # client's agent here would let anyone with root on this box use that key
       # for as long as the session lasts.
       AllowAgentForwarding = false;
