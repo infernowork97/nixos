@@ -92,6 +92,11 @@ let
     homesDir = work;
   };
 
+  crashLog = factory.mkCrashLog {
+    stateDir = "${work}/ops";
+    pstoreDir = "${work}/pstore";
+  };
+
   # An in-memory systemd: a unit is active while a file named after it exists.
   # Answers `is-active --quiet` for the deploy's health gate from $SSHD_UP.
   fakeSystemctl = pkgs.writeShellScriptBin "systemctl" ''
@@ -205,6 +210,7 @@ pkgs.runCommand "software-factory-check"
       boot
       deploy
       maintenance
+      crashLog
       fakeSystemctl
       fakeGh
       fakeCurl

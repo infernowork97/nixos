@@ -392,6 +392,7 @@ own.
   | `/free-disk` | plan, confirm, then prune pushed worktrees, caches and garbage |
   | `/deploy [rollback]` | Part 4 |
   | `/reboot`, `/gc` | root operations through fixed units |
+  | `/crash-log` | the saved kernel crash dumps, and the newest one's panic |
 
   The skills drive `factory-ctl`, which works the same in a shell
   **[factory]** (`factory-ctl help`).
@@ -523,5 +524,11 @@ just factory-deploy        # then the admin password for sudo
   repository.
 - **Clones fail [factory]:** `ssh -T git@github.com` should greet
   infernowork97; if not, redo step 15.
+- **The box booted to a blank screen and stayed there [box]:** it likely
+  panicked early. Power-cycle it, then run `/crash-log` in the admin server
+  (`factory-ctl crash-log` in a shell **[factory]**). At boot
+  `factory-crash-log` copies the dumps `systemd-pstore` kept, root-only,
+  under `/var/lib/systemd/pstore`, to `/var/lib/factory-ops/crash`. No dump
+  means the panic left none in pstore.
 - **The box gets hot or loud:** builds use 6 threads at most. Keep the vents
   clear; a laptop stand helps more than any setting.

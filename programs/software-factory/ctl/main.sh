@@ -12,6 +12,7 @@ main() {
     free-disk) cmd_free_disk "$@" ;;
     deploy) cmd_deploy ;;
     rollback | reboot | gc) cmd_root_op "$cmd" ;;
+    crash-log) cmd_crash_log ;;
     boot) cmd_boot "$@" ;;
     help | --help | -h) usage ;;
     *)
@@ -35,6 +36,7 @@ factory-ctl - run the software factory
   free-disk plan|apply          list or delete what can be reclaimed
   deploy                        deploy main's tip once CI is green
   rollback | reboot | gc        root operations, run by fixed units
+  crash-log                     saved kernel crash dumps, and the newest one's tail
 
 Exit codes: 2 = refused, rerun with --force; 3 = not cloned, needs a URL.
 EOF

@@ -17,7 +17,7 @@ fail() {
 }
 reset() {
   kill_sessions
-  rm -rf "$HOME" "$UNITS" "$GH" "$work/ops"
+  rm -rf "$HOME" "$UNITS" "$GH" "$work/ops" "$work/pstore"
   mkdir -p "$HOME" "$GH"
   : >"$CALLS"
 }
@@ -378,6 +378,43 @@ for op in rollback reboot gc; do
   factory-ctl "$op" >/dev/null
   called "systemctl start --no-block factory-$op.service"
 done
+
+# ─── factory-ctl crash-log / root: factory-crash-log ────────────────────────
+
+echo "crash-log: no dumps, before or after the copy, is not an error"
+reset
+factory-ctl crash-log | grep -q "No kernel crash dumps saved." || fail "crash-log did not say there are none"
+factory-crash-log
+factory-ctl crash-log | grep -q "No kernel crash dumps saved." || fail "an empty pstore left a dump"
+
+echo "factory-crash-log: copies every part of every dump, readable by all; rerunning is a no-op"
+reset
+# Two dumps with the same part number, and a part that is not a merged dmesg.
+add_dump() {
+  mkdir -p "$work/pstore/$1/$2"
+  seq -f "$1 line %g" 100 >"$work/pstore/$1/$2/dmesg.txt"
+  touch -d "$3" "$work/pstore/$1/$2/dmesg.txt"
+}
+add_dump 1700000000 001 '3 days ago'
+add_dump 1700000000 002 '2 days ago'
+add_dump 1800000000 001 '1 hour ago'
+touch "$work/pstore/1800000000/001/dmesg-efi_pstore-1"
+factory-crash-log
+factory-crash-log
+[ "$(ls "$work/ops/crash")" = "$(printf '%s\n' 1700000000-001.txt 1700000000-002.txt 1800000000-001.txt)" ] ||
+  fail "copied $(ls "$work/ops/crash")"
+cmp -s "$work/pstore/1800000000/001/dmesg.txt" "$work/ops/crash/1800000000-001.txt" || fail "a dump was not copied as is"
+[ "$(stat -c %a "$work/ops/crash" "$work/ops/crash/1700000000-002.txt" | paste -sd ' ')" = "755 644" ] ||
+  fail "the copies are not readable by the agent account"
+
+echo "crash-log: lists the dumps newest first and shows the newest one's last 80 lines"
+factory-ctl crash-log >"$work/out"
+[ "$(sed -n 's/^  \([^ ]*\.txt\)  .*/\1/p' "$work/out" | paste -sd ' ')" = "1800000000-001.txt 1700000000-002.txt 1700000000-001.txt" ] ||
+  { cat "$work/out" >&2; fail "the dumps are not listed newest first"; }
+grep -qxF "1800000000 line 21" "$work/out" && grep -qxF "1800000000 line 100" "$work/out" ||
+  { cat "$work/out" >&2; fail "the newest dump's tail is missing"; }
+! grep -qxF "1800000000 line 20" "$work/out" || fail "more than 80 lines were shown"
+! grep -q "^1700000000 line" "$work/out" || fail "an older dump's content was shown"
 
 # ─── Root: factory-deploy ────────────────────────────────────────────────────
 
