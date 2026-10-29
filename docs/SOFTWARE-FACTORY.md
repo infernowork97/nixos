@@ -192,53 +192,84 @@ Delete the temporary copies of the tokens.
 
 Power on and press **F10** for the BIOS setup:
 
-- **Secure Boot: off**, legacy/CSM support off, so it boots UEFI only.
-  NixOS uses unsigned systemd-boot, and Secure Boot's kernel lockdown would
-  also block the `kexec` that nixos-anywhere relies on.
-- Boot order: USB first for the next step.
+- **Secure Boot: off** (System Configuration > Boot Options), legacy support
+  off, so it boots UEFI only. Secure Boot locks the kernel down, and a
+  locked-down kernel refuses the `kexec` nixos-anywhere relies on; NixOS's
+  systemd-boot is unsigned too. `just factory-install` checks this first and
+  stops if it is still on.
 - If offered, enable **power on after AC loss**, so the box comes back by
   itself after a power cut drains the battery.
 
-### 10. Ubuntu Server **[box]** then **[operator]**
+Ubuntu still boots afterwards.
 
-Ubuntu is only the vehicle for nixos-anywhere: the install wipes it.
+### 10. Ubuntu Server and the install link **[box]** then **[operator]**
 
-1. **[box]** Plug the **ethernet cable** into the router: the install needs a
-   wired link (step 12). Install **Ubuntu Server 26.04** from a USB stick, with
-   **Install OpenSSH server** ticked. Any user name will do.
-2. **[box]** After the reboot, note the LAN address from `ip -4 addr`.
-3. **[operator]** Give root your key, which nixos-anywhere logs in with:
+Ubuntu is only the vehicle for nixos-anywhere: the install wipes it. The box
+is cabled **straight to the operator machine** (its USB ethernet adapter), and
+the operator machine shares its own internet over that cable.
+
+1. **[box]** Install **Ubuntu Server 26.04** from a USB stick, with **Install
+   OpenSSH server** ticked. Any user name will do (here `merlin7559`).
+2. Cable the box's ethernet port to the operator machine's ethernet adapter.
+3. **[operator]** Share this machine's network over that cable. Find the
+   adapter's name with `ip -br link` (here `enx6c1ff708f396`):
    ```sh
-   ssh-copy-id <user>@<lan-ip>
-   ssh -t <user>@<lan-ip> 'sudo install -d -m 700 /root/.ssh && sudo cp ~/.ssh/authorized_keys /root/.ssh/'
-   ssh root@<lan-ip> true   # must succeed without a password
+   just factory-link-up enx6c1ff708f396
    ```
+   This machine becomes `10.42.0.1` on the cable and hands out `10.42.0.x`.
+4. **[box]** Ubuntu installed without a network writes no DHCP for the wired
+   port, so turn it on, logged in on the box's own keyboard:
+   ```sh
+   printf 'network:\n  version: 2\n  ethernets:\n    eno1:\n      dhcp4: true\n' \
+     | sudo tee /etc/netplan/50-install-link.yaml
+   sudo chmod 600 /etc/netplan/50-install-link.yaml
+   sudo netplan apply
+   ip -4 -br addr show eno1      # 10.42.0.x: that is <box-ip> from here on
+   ```
+   `sudo` wants the Ubuntu user's password. Root has no password on Ubuntu,
+   so `su` never works; that is normal.
+5. **[operator]** Copy your key to the Ubuntu user. Use a real terminal, not
+   Claude's `!` prefix, which has no terminal to ask the password on, and
+   never `sudo` (local root has no key):
+   ```sh
+   ssh-copy-id -i ~/.ssh/id_ed25519.pub merlin7559@<box-ip>
+   ```
+6. **[box]** Give root the same key, since nixos-anywhere logs in as root:
+   ```sh
+   sudo install -d -m 700 /root/.ssh
+   sudo cp /home/merlin7559/.ssh/authorized_keys /root/.ssh/
+   ```
+7. **[operator]** Check: `ssh root@<box-ip> true` must succeed with no
+   password.
 
 ### 11. Pin the disk, then merge **[operator]** then **[browser]**
 
-1. Read the SSD's stable id:
+1. The disk is pinned already, as
+   `/dev/disk/by-id/nvme-NVMe_CA5-8D1024_00210650002E` in
+   `hosts/software-factory/disk-config.nix`. After a disk swap, read the new
+   one's id and change it there:
    ```sh
-   ssh root@<lan-ip> 'lsblk -d -o NAME,SIZE,MODEL,TRAN; ls -l /dev/disk/by-id/ | grep -v part'
+   ssh root@<box-ip> 'lsblk -d -o NAME,SIZE,MODEL,TRAN; ls -l /dev/disk/by-id/ | grep -v part'
    ```
-   Pick the 1 TB disk's `ata-...` (SATA) or `nvme-...` entry, not a `wwn-`
-   or `nvme-eui.` alias, and put it in `hosts/software-factory/disk-config.nix`
-   as `device = "/dev/disk/by-id/<id>";`. Commit and push.
-2. **[browser]** Wait for the pull request's `check` to go green, then merge
-   it, and pull `main` here: `git switch main && git pull`.
+   Pick the `nvme-...` (or `ata-...`) entry without `eui.`/`wwn-`.
+2. **[browser]** With the secrets from step 8 pushed, wait for the pull
+   request's `check` to go green, then merge it, and pull `main` here:
+   `git switch main && git pull`.
 
 ### 12. Install NixOS **[operator]**
 
-From `main`, with the ethernet cable still plugged in:
+From `main`, with the cable still plugged in:
 
 ```sh
-just factory-install <lan-ip>
+just factory-install <box-ip>
 ```
 
 1. Paste the `software-factory-age-key` note from Bitwarden, then press
    **Ctrl-D** on an empty line.
 2. Wait. nixos-anywhere kexecs the box into an in-memory NixOS installer,
    wipes the disk, builds the system **here** and copies it over, installs it
-   and reboots. 20-40 minutes, mostly downloads.
+   and reboots. 20-40 minutes, mostly downloads. The installed system
+   takes `10.42.0.x` on the cable again.
 3. About a minute after the reboot, the box joins the tailnet by itself with
    the auth key. Check login.tailscale.com > **Machines**: `software-factory`,
    tagged `tag:factory`.
@@ -248,6 +279,7 @@ just factory-install <lan-ip>
 1. **Unplug the ethernet cable.** NetworkManager joins the Wi-Fi from the
    `wifi-env` secret; within a minute the box is reachable over the tailnet
    again (`tailscale ping software-factory` from the operator machine).
+   Then, **[operator]**, `just factory-link-down` removes the shared profile.
 2. Close the lid and put it somewhere ventilated, plugged in. Lid close and
    sleep are disabled, so it keeps running.
 
@@ -261,9 +293,7 @@ ssh -p 2222 admin@software-factory   # your ~/.ssh/id_ed25519; you get a shell, 
 ssh factory@software-factory         # Tailscale SSH: no key, no password; then exit
 ```
 
-Accept each host key with `yes` the first time. The Ubuntu install left an
-old host key for the LAN address in `~/.ssh/known_hosts`; remove it with
-`ssh-keygen -R <lan-ip>`.
+Accept each host key with `yes` the first time.
 
 ### 15. Give the box its GitHub key **[operator]** then **[browser]**
 
@@ -426,8 +456,11 @@ just factory-deploy        # then the admin password for sudo
   - `nmcli device status` and `journalctl -u NetworkManager -e` for Wi-Fi;
     `sudo systemctl status tailscaled`, and `sudo tailscale up` if it is
     logged out;
-  - plugging the ethernet cable back in always gives a working link.
-- **Wi-Fi password changed:** plug in the ethernet cable, run
+  - cabling it to the operator machine again with `just factory-link-up
+    <iface>` always gives a working link (`ssh -p 2222 admin@<box-ip>` over
+    the cable works only once Tailscale is up, so use the keyboard first).
+- **Wi-Fi password changed:** cable it to the operator machine
+  (`just factory-link-up <iface>`), run
   `just factory-secrets` (it overwrites everything, so have the other values at
   hand) or `just edit-secrets software-factory` to change `wifi-env` alone,
   commit, merge, and deploy.
@@ -458,9 +491,13 @@ just factory-deploy        # then the admin password for sudo
 
 ## Troubleshooting
 
+- **"the box's kernel is locked down":** Secure Boot is still on (step 9).
 - **nixos-anywhere hangs after "kexec":** the box lost its network. It must
-  be on ethernet (step 10), and Secure Boot must be off (step 9). Power-cycle
-  it back into Ubuntu and retry.
+  be on the cable with `just factory-link-up` active (step 10). Power-cycle
+  it back into Ubuntu, check `just factory-link-leases`, and retry.
+- **The box has no 10.42.0.x address [box]:** the netplan file from step 10.4
+  is missing, or the cable is in a different adapter than the one given to
+  `factory-link-up`.
 - **No Wi-Fi after unplugging ethernet [box]:** `nmcli connection show
   home-wifi` must exist; if not, `journalctl -u NetworkManager-ensure-profiles
   -e`. A wrong SSID or password means rewriting `wifi-env` (Part 5). The card

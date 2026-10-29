@@ -1,6 +1,7 @@
-# HP Omen 15-ax005: i7-6700HQ (4 cores, 8 threads), 12 GB, a 1 TB SSD, an Intel
-# Wi-Fi card and an NVIDIA GTX 960M behind Optimus. It runs lid-closed on a
-# shelf at home, on Wi-Fi, plugged in; the battery doubles as a UPS.
+# HP Omen 15-ax005: i7-6700HQ (4 cores, 8 threads), 12 GB, a 1 TB NVMe SSD,
+# Intel 7265 Wi-Fi, Realtek RTL8111 ethernet and an NVIDIA GTX 965M behind
+# Optimus. It runs lid-closed at home, on Wi-Fi, plugged in; the battery
+# doubles as a UPS.
 { config, ... }:
 {
   boot = {
@@ -29,6 +30,7 @@
     blacklistedKernelModules = [ "nouveau" ];
   };
 
+  # iwlwifi for the 7265 and rtl_nic for the RTL8111 are both in here.
   hardware = {
     enableRedistributableFirmware = true;
     cpu.intel.updateMicrocode = true;

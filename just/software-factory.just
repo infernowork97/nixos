@@ -204,19 +204,55 @@ factory-restore-age-key:
 
 # ─── Install and deploy ──────────────────────────────────────────────────────
 
+# The install link: the box cabled straight to this machine's ethernet adapter.
+# NetworkManager's "shared" mode makes this machine 10.42.0.1 on that cable,
+# hands the box an address by DHCP and NATs it to the internet through this
+# machine's own connection. The kexec installer finds it again by DHCP too.
+#
+# Share this machine's network with the box over the cable on <interface>
+factory-link-up $iface:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "$iface" in
+        "" | *[!a-zA-Z0-9_-]*) echo "ERROR: invalid interface name '$iface' (see: ip -br link)" >&2; exit 1 ;;
+    esac
+    nmcli connection delete factory-install-link >/dev/null 2>&1 || true
+    nmcli connection add type ethernet ifname "$iface" con-name factory-install-link \
+        ipv4.method shared ipv6.method link-local connection.autoconnect yes >/dev/null
+    nmcli connection up factory-install-link >/dev/null
+    echo "This machine is 10.42.0.1 on $iface. Leases handed to the box:"
+    echo "  just factory-link-leases"
+
+# Show the addresses the box got over the install link
+factory-link-leases:
+    @ip -4 neigh show | grep '^10\.42\.0\.' || echo "No box seen on 10.42.0.0/24 yet."
+
+# Remove the install link once the box is on Wi-Fi
+factory-link-down:
+    nmcli connection delete factory-install-link
+
 # Replaces the Ubuntu Server on the box with NixOS, using nixos-anywhere over
-# root SSH on the LAN. The box must be on ethernet: nixos-anywhere kexecs into
-# an installer that restores wired networking only, never Wi-Fi. The age key is
+# root SSH on the install link (factory-link-up). The box must be on ethernet:
+# nixos-anywhere kexecs into an installer that restores wired networking only,
+# never Wi-Fi. The age key is
 # pasted from Bitwarden into a private temp directory that nixos-anywhere copies
 # to the new root, and the directory is removed on exit. The system is built
 # here, where the caches are warm, and copied over.
 #
-# Install NixOS on the box over its LAN address (wipes its disk)
+# Install NixOS on the box over its install-link address (wipes its disk)
 factory-install $ip:
     #!/usr/bin/env bash
     set -euo pipefail
     case "$ip" in
         *[!0-9.]* | "") echo "ERROR: expected an IPv4 address, got '$ip'" >&2; exit 1 ;;
+    esac
+
+    # Secure Boot locks the kernel down, and a locked-down kernel refuses to
+    # kexec the unsigned installer - midway, after the age key was pasted.
+    lockdown=$(ssh -o ConnectTimeout=10 "root@$ip" 'cat /sys/kernel/security/lockdown 2>/dev/null || echo "[none]"')
+    case "$lockdown" in
+        *"[none]"*) ;;
+        *) echo "ERROR: the box's kernel is locked down ($lockdown): turn Secure Boot off in its BIOS (F10)." >&2; exit 1 ;;
     esac
 
     extra=$(mktemp -d)
@@ -236,6 +272,8 @@ factory-install $ip:
         --extra-files "$extra" \
         --target-host "root@$ip"
 
+    # The installed system has a new host key on the same address.
+    ssh-keygen -R "$ip" >/dev/null 2>&1 || true
     echo "Installed. Once software-factory shows in the tailnet, unplug the ethernet"
     echo "cable and check it rejoins over Wi-Fi."
 
