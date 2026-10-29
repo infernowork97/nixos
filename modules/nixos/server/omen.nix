@@ -21,6 +21,9 @@
         enable = true;
         # The boot menu offers the two generations factory-gc keeps.
         configurationLimit = 2;
+        # A RAM test in the boot menu, picked at the box with the lid open.
+        # Early-boot oopses on a bad pointer point at memory corruption.
+        memtest86.enable = true;
       };
       efi.canTouchEfiVariables = true;
     };
@@ -28,6 +31,17 @@
     # Headless: the dGPU is never used, and nouveau on Maxwell only adds
     # suspend and fan bugs. The iGPU drives the console.
     blacklistedKernelModules = [ "nouveau" ];
+
+    # Nobody is at the box to power-cycle it, so a crash or a kernel lockup
+    # reboots it 10s later instead of hanging. The BIOS disables the iTCO
+    # hardware watchdog, so the kernel's NMI and soft-lockup detectors are
+    # the only ones; a freeze they miss still needs a power-cycle.
+    kernelParams = [
+      "panic=10"
+      "panic_on_oops=1"
+      "softlockup_panic=1"
+      "nmi_watchdog=panic"
+    ];
   };
 
   # iwlwifi for the 7265 and rtl_nic for the RTL8111 are both in here.
