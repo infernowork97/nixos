@@ -266,7 +266,15 @@ factory-install $ip:
         exit 1
     }
 
-    nixos-anywhere \
+    # From the factory-install shell when inside it, and otherwise the same
+    # flake.lock-pinned build.
+    if command -v nixos-anywhere >/dev/null 2>&1; then
+        anywhere=(nixos-anywhere)
+    else
+        anywhere=(nix run --inputs-from . nixpkgs#nixos-anywhere --)
+    fi
+
+    "${anywhere[@]}" \
         --flake .#software-factory \
         --build-on local \
         --extra-files "$extra" \
