@@ -211,8 +211,9 @@ network, and the repository changed owner. What changed, and what it costs:
   asks; the policy no longer denies it, since a deny rule was never a
   boundary (an agent with the token could merge through the API). The guards
   that remain: the ruleset requires a pull request, the account is a
-  throwaway, and nothing deploys on merge - deploys still need a human
-  `/deploy` or workflow run.
+  throwaway, and merging alone deploys nothing: a deploy is a separate
+  `/deploy`, workflow or `factory-ctl deploy` step, which a factory process
+  can also take (see the prompt-injection risk above).
 - **Admin key.** The operator machine's plain ed25519 key replaces the
   YubiKeys. Port 2222 is reachable only over the tailnet, and sudo still needs
   the admin password.
