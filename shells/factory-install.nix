@@ -15,7 +15,9 @@ pkgs.mkShell {
     ssh-to-age
     mkpasswd # yescrypt hash of the admin password
     nixos-anywhere # factory-install
-    openssh
+    # No openssh: nixpkgs builds it without GSSAPI, so it warns on every
+    # connection about the GSSAPIAuthentication line in Ubuntu's ssh_config.
+    # The system's ssh is used instead.
     wl-clipboard # age keys to the clipboard for Bitwarden (Wayland)
     xclip # the same under X11
   ];

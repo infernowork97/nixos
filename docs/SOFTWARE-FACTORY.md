@@ -266,7 +266,10 @@ just factory-install <box-ip>
 
 1. Paste the `software-factory-age-key` note from Bitwarden, then press
    **Ctrl-D** on an empty line.
-2. Wait. nixos-anywhere kexecs the box into an in-memory NixOS installer,
+2. Wait. Lines saying `/etc/ssh/ssh_config line 52: Unsupported option
+   "gssapiauthentication"` are harmless: nixos-anywhere brings its own ssh,
+   built without GSSAPI, and it reads Ubuntu's ssh config. nixos-anywhere
+   kexecs the box into an in-memory NixOS installer,
    wipes the disk, builds the system **here** and copies it over, installs it
    and reboots. 20-40 minutes, mostly downloads. The installed system
    takes `10.42.0.x` on the cable again.
