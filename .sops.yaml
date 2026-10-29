@@ -7,9 +7,9 @@ creation_rules:
   - path_regex: secrets/hosts/software-factory\.yaml$
     key_groups:
       - age:
-          # operator-age-key: not generated yet
-          # software-factory-age-key: not generated yet
+          - age1mufzx8jw8zxdtyp9nv02pcvm9zvrrmn0fds96xen67dmlluyn4sq6yzfg2 # operator
+          - age1ef6ec04x855pe8hdufmq7tvn4gu2ud2eyl24rhth0fjkgn56xf7qj340sz # software-factory
   - path_regex: secrets/.*\.yaml$
     key_groups:
       - age:
-          # operator-age-key: not generated yet
+          - age1mufzx8jw8zxdtyp9nv02pcvm9zvrrmn0fds96xen67dmlluyn4sq6yzfg2 # operator
