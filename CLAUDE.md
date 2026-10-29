@@ -325,7 +325,8 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
   machine over a wired link, inside `nix develop .#factory-install`.
 - **Agents push as infernowork97, not a bot**: `main` is guarded by a ruleset
   (pull request required, 0 approvals). Agents run `gh pr merge` only when
-  the user asks; nothing deploys on merge, only `/deploy` or the workflow.
+  the user asks. Merging deploys nothing; `/deploy`, the workflow or
+  `factory-ctl deploy` does, and an agent can run the last one itself.
 - **This repository is public.** Never commit IP addresses, tailnet names,
   private repository names or anything that maps the server's attack surface
   beyond what the Nix config itself states. Private repositories are added on

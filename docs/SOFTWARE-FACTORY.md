@@ -88,7 +88,8 @@ Copy the key (`tskey-auth-...`) somewhere temporary for step 8.
 Agents push as infernowork97 itself (there is no separate bot account). That
 account can merge its own pull requests, so main is guarded by a ruleset that
 requires a pull request. Agents merge with `gh pr merge` only when you ask
-them to. Merging deploys nothing: only `/deploy` or the workflow does.
+them to. Merging deploys nothing: a deploy is a separate `/deploy`, workflow
+run or `factory-ctl deploy`, and an agent can run the last one itself.
 
 1. **Enable Actions and Dependabot** on `infernowork97/nixos`: **Actions** tab
    > enable workflows; **Settings** > **Code security** > Dependabot version

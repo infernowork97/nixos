@@ -90,8 +90,9 @@ These are deliberate, and recorded so they are not mistaken for oversights.
 
 - **Anything running as `factory` holds its credentials.** A prompt injection
   that gets past the classifier can use the Claude login and the bot's GitHub
-  access. That is why the bot is a throwaway account whose merges deploy
-  nothing, and why nothing of value beyond it lives on the server.
+  access, merge a pull request and run `factory-ctl deploy`. That is why the
+  bot is a throwaway account, and why nothing of value beyond it lives on the
+  server.
   On suspicion: revoke the bot's keys and token, sign the server out of the
   Claude account, rebuild.
 - **The bot can push branches that change CI workflows.** Its SSH key is not
