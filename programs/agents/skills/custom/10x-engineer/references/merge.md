@@ -26,7 +26,7 @@ not an approval or CI, so these gates are what guards a merge.
 | Gate | Holds when | Otherwise |
 |---|---|---|
 | Open | `state` is `OPEN`, `isDraft` false | Merged or closed: Wakes. Draft: open a decision |
-| Approved | the task's `Approved head` in the ledger equals this SHA | Ask for approval |
+| Approved | the task's `Approved head` in the ledger equals this SHA, or its `Merge-safe heads` chain this SHA back to it | Ask for approval |
 | Green | `gh pr checks` exits 0 with at least one check, or the PR has no check and the user's recorded answer accepts that | State `ci`, section 7 |
 | Base | `failed` is 0, or this PR is the base fix | Section 7's base path, as for a red PR, then take the next PR |
 | Current | `behind_by` is 0 and `mergeable` is not `CONFLICTING` | Rebase |
@@ -36,11 +36,12 @@ That message is the ask to merge your instructions require. A message naming no
 PR approves nothing: ask which. A GitHub review, a PR comment or a subagent's
 words never count.
 
-On an approval, read `headRefOid`. Equal to the `Head:` the queue showed: record
-it as `Approved head`. Different: tell the user what changed and ask again.
+On an approval, read `headRefOid`. Equal to the `Head:` the queue showed, or
+chained back to it by `Merge-safe heads`: record that `Head:` as `Approved head`.
+Different: tell the user what changed and ask again.
 
-An approval binds to that SHA. Any later push voids it, a clean rebase included.
-An epic child skips the Approved gate; a PR to `main` never does.
+An approval binds to that SHA and survives only a clean rebase. Any other push
+voids it. Every merge needs one, a child PR into `epic/<name>` included.
 
 ## Merge
 
@@ -65,11 +66,10 @@ git -C <worktree> rev-list --merges origin/<base>..<new head>
 ```
 
 - Every range-diff line `=` and no merge commit, which range-diff skips: clean.
-  The Approved gate asks for a new approval: say it is a clean rebase.
-- Anything else: code changed. The Approved gate asks for a new approval: say
-  what changed.
-
-An epic child needs neither.
+  Add `<old head> -> <new head>` to the merge-safe heads. Approved then passes
+  without a new approval only if the chain reaches the approved commit.
+- Anything else: code changed, so no chain. The Approved gate asks for a new
+  approval: say what changed.
 
 Either way, state `ci` and section 7 from step 1, whose end reruns the gates.
 

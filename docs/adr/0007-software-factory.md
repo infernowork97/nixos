@@ -92,8 +92,9 @@ These are deliberate, and recorded so they are not mistaken for oversights.
   that gets past the classifier can use the Claude login and the agent
   account's GitHub access, merge a pull request and run `factory-ctl deploy`.
   That is why the account is a throwaway, and why nothing of value beyond it
-  lives on the server. `/10x-engineer` merges to `main` only a pull request the
-  user approved in chat, at the commit they approved. That is the skill's rule,
+  lives on the server. `/10x-engineer` merges only a pull request the user
+  approved in chat, at the commit they approved or a clean rebase of it. That
+  is the skill's rule,
   not GitHub's: nobody can approve their own pull request here, so GitHub
   requires no approval.
   On suspicion: revoke the account's keys and token, sign the server out of the

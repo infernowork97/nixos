@@ -27,8 +27,8 @@ Breakdown confirmed: <yes, when>
 
 ## Tasks
 
-| Task | Repo | Wave | Deps | Base | QA | Heavy | Security-sensitive | Branch | PR | State | Tries | Approved head |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Task | Repo | Wave | Deps | Base | QA | Heavy | Security-sensitive | Branch | PR | State | Tries | Approved head | Merge-safe heads |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 
 ## Pre-flight
 
@@ -72,3 +72,6 @@ its task goes `queued`, and the answer starts it only in a free slot.
 
 `Approved head` is the SHA the user approved in chat, recorded by the Approved
 gate in `references/merge.md`, so an approval survives a resume.
+
+`Merge-safe heads` lists `<old sha> -> <new sha>` for each clean rebase, so the
+merge loop can tie the head back to the commit the user approved.

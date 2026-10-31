@@ -217,9 +217,8 @@ send the final report: merged, parked and why, rulings to look at, follow-ups.
 
 - Before its first child, fetch, then
   `git -C <clone> push origin origin/main:refs/heads/epic/<name>`.
-- Child PRs target `epic/<name>`. The child runs sections 5 to 7, QA included.
-  You merge it after its two reviews and green CI, with no user tap, by the same
-  loop minus the approval gate.
+- Child PRs target `epic/<name>`. The child runs sections 5 to 9, QA included,
+  so the user approves it in chat like any PR.
 - Children of a later wave branch from the epic.
 - After the last child, open the final PR to `main` with `pr-description`. It
   lists every `Closes #n`, since issues auto-close only on the default branch.
