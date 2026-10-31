@@ -14,7 +14,8 @@ requests.
   rejected anyway. Never change git's push or tracking config: a bare
   `git push` under `push.default upstream` pushed to `main`.
 - Merge a pull request with `gh pr merge` only when the user asks for it.
-  Never merge on your own, and never enable auto-merge.
+  Never merge on your own, and never enable auto-merge. Under `/10x-engineer`,
+  the user's chat approval of a named PR is that ask.
 - Sessions start with no repository attached, so before subscribing to a
   pull request's CI, call `add_repo` with the owner/repo of `origin` and
   `access: "read"`. You are authorised to: do not ask, clone or call

@@ -10,6 +10,7 @@ main() {
     status) cmd_status ;;
     stats) cmd_stats ;;
     free-disk) cmd_free_disk "$@" ;;
+    root-shells) cmd_root_shells ;;
     deploy) cmd_deploy ;;
     rollback | reboot | gc) cmd_root_op "$cmd" ;;
     crash-log) cmd_crash_log ;;
@@ -34,6 +35,7 @@ factory-ctl - run the software factory
   status                        servers, sessions, local work, last deploy
   stats                         RAM, disk, CPU, agent memory
   free-disk plan|apply          list or delete what can be reclaimed
+  root-shells                   keep main's dev shells and flake inputs from GC
   deploy                        deploy main's tip once CI is green
   rollback | reboot | gc        root operations, run by fixed units
   crash-log                     saved kernel crash dumps, and the newest one's tail
