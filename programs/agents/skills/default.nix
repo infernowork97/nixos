@@ -64,6 +64,7 @@ let
     "refactor" # /refactor - behaviour-preserving cleanup of a diff; also invoked by engineer
     "self-improve" # /self-improve - measure past sessions and fix the agent setup's bottlenecks, factory and claude-pm only
     "skeptic" # /skeptic - fail-fast feasibility review, explicit invocation only
+    "sync-fork" # /sync-fork - merge ILIYANGERMANOV/nixos into this fork, explicit invocation only
     "ui-coding" # UI-specific rules on top of engineering, model-invoked on UI work
   ];
 

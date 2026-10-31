@@ -112,6 +112,7 @@ let
     "refactor"
     "setup-matt-pocock-skills"
     "skeptic"
+    "sync-fork"
     "ui-coding"
   ];
 

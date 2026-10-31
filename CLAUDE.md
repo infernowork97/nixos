@@ -346,6 +346,8 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
   private repository names or anything that maps the server's attack surface
   beyond what the Nix config itself states. Private repositories are added on
   the box with `factory-ctl start` (the admin agent's `/start-repo`).
+- **Upstream is tracked by merge commits.** ILIYANGERMANOV/nixos comes in through
+  `/sync-fork`, and that PR is never squashed.
 - Recipes are in `just/software-factory.just`.
 
 ## Neovim
