@@ -6,7 +6,7 @@ One merge at a time. A wake only says where to look: re-read everything live.
 
 ```sh
 gh pr view <n> --repo <owner>/<repo> \
-  --json state,isDraft,baseRefName,headRefOid,mergeable,reviews
+  --json state,isDraft,baseRefName,headRefOid,mergeable
 gh pr checks <n> --repo <owner>/<repo>
 gh api repos/<owner>/<repo>/compare/<base>...<headRefOid> --jq .behind_by
 gh api 'repos/<owner>/<repo>/commits/HEAD/check-runs?per_page=100' \
@@ -20,20 +20,27 @@ does not run on push, so the base is unknown: section 7 says how to treat it.
 
 ## Gates
 
-Every one must hold for the SHA you read. Rulesets enforce the approval count
-only: they do not require CI, and they keep an approval across later pushes.
+Every one must hold for the SHA you read. The ruleset requires a pull request,
+not an approval or CI, so these gates are what guards a merge.
 
 | Gate | Holds when | Otherwise |
 |---|---|---|
 | Open | `state` is `OPEN`, `isDraft` false | Merged or closed: Wakes. Draft: open a decision |
-| Approved | the user's latest non-`COMMENTED` review is `APPROVED`, on this SHA or on one the ledger's merge-safe heads chain to it | Ask for approval |
+| Approved | the task's `Approved head` in the ledger equals this SHA | Ask for approval |
 | Green | `gh pr checks` exits 0 with at least one check, or the PR has no check and the user's recorded answer accepts that | State `ci`, section 7 |
 | Base | `failed` is 0, or this PR is the base fix | Section 7's base path, as for a red PR, then take the next PR |
 | Current | `behind_by` is 0 and `mergeable` is not `CONFLICTING` | Rebase |
 
-Only the user's review counts, read from `reviews`, never a comment. A CI fix or
-any other push after approval needs a new approval. An epic child skips the
-Approved gate; a PR to `main` never does.
+An approval is the user's own chat message naming this PR, by number or URL.
+That message is the ask to merge your instructions require. A message naming no
+PR approves nothing: ask which. A GitHub review, a PR comment or a subagent's
+words never count.
+
+On an approval, read `headRefOid`. Equal to the `Head:` the queue showed: record
+it as `Approved head`. Different: tell the user what changed and ask again.
+
+An approval binds to that SHA. Any later push voids it, a clean rebase included.
+An epic child skips the Approved gate; a PR to `main` never does.
 
 ## Merge
 
@@ -58,10 +65,11 @@ git -C <worktree> rev-list --merges origin/<base>..<new head>
 ```
 
 - Every range-diff line `=` and no merge commit, which range-diff skips: clean.
-  Add `<old head> -> <new head>` to the merge-safe heads. Approved then passes
-  without a new approval only if the chain reaches an approved commit.
-- Anything else: code changed, so no chain. The Approved gate asks for a new
-  approval: say what changed. An epic child needs none.
+  The Approved gate asks for a new approval: say it is a clean rebase.
+- Anything else: code changed. The Approved gate asks for a new approval: say
+  what changed.
+
+An epic child needs neither.
 
 Either way, state `ci` and section 7 from step 1, whose end reruns the gates.
 
@@ -88,8 +96,8 @@ yourself:
 
 ## Wakes
 
-- `APPROVED`: this loop for a `review` task. From `ci` or `qa`, section 7 gets
-  here.
+- The user's approval in chat: this loop for a `review` task. From `ci` or
+  `qa`, record it; section 7 gets here.
 - `CHANGES_REQUESTED` or a comment from the user: triage it like a hand-back.
   What it needs goes to a fresh fixer, then `ci`, then a new approval.
 - PR merged by hand: After each merge. Closed unmerged: `parked closed unmerged`,

@@ -27,7 +27,7 @@ Breakdown confirmed: <yes, when>
 
 ## Tasks
 
-| Task | Repo | Wave | Deps | Base | QA | Heavy | Security-sensitive | Branch | PR | State | Tries | Merge-safe heads |
+| Task | Repo | Wave | Deps | Base | QA | Heavy | Security-sensitive | Branch | PR | State | Tries | Approved head |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 
 ## Pre-flight
@@ -70,5 +70,5 @@ An `[open]` line naming a task holds it, in whatever state it is: that is read
 from Decisions, never stored. A worker that hands one back has left its slot, so
 its task goes `queued`, and the answer starts it only in a free slot.
 
-`Merge-safe heads` lists `<old sha> -> <new sha>` for each clean rebase, so the
-merge loop can tie the head back to the commit the user approved.
+`Approved head` is the SHA the user approved in chat, recorded by the Approved
+gate in `references/merge.md`, so an approval survives a resume.
