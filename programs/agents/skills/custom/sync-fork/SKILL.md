@@ -48,8 +48,9 @@ git merge --no-ff --no-commit upstream/main
 
 Resolve conflicts. A protected path keeps the fork's side, and a path the fork
 deleted stays deleted, even with upstream's edits on it. Revert each skipped
-change here, with `git checkout origin/main -- <path>` or by hand, so it is part
-of the merge. A cherry-pick or a squash would fork the history from upstream.
+change here, so it is part of the merge: `git checkout origin/main -- <path>`
+for a path `origin/main` has, `git rm -f <path>` for one upstream added, or by
+hand. A cherry-pick or a squash would fork the history from upstream.
 
 Adapt merged text to the fork in a follow-up commit: paths, hosts and identity
 it names.
@@ -63,10 +64,15 @@ Complete when every check below passes on the final commit:
    `git diff origin/main HEAD -- <path>`, and read
    `git diff --diff-filter=A --name-only origin/main HEAD` for deleted paths
    that came back. Each difference is a change the user or triage accepted.
-3. `git grep -n -i -e iliyangermanov -e ivybot -e ivywallet` lists only
+3. Each skipped theme: for every path its commits touch
+   (`git show --name-only --format= <commit>`), read
+   `git diff origin/main HEAD -- <path>`. Each is empty, or its difference
+   belongs to a taken or adapted theme. A clean merge brings a skipped change
+   in without a conflict, so this is where it shows.
+4. `git grep -n -i -e iliyangermanov -e ivybot -e ivywallet` lists only
    intended references.
-4. The host evaluation from `CLAUDE.md`'s Checks.
-5. `nix develop .#default -c just check` once, in the background.
+5. The host evaluation from `CLAUDE.md`'s Checks.
+6. `nix develop .#default -c just check` once, in the background.
 
 ## 6. Open the PR
 
@@ -87,12 +93,9 @@ The fork's side wins here unless the user says otherwise.
 - `.github/workflows/check.yml`: no `cache-guard` job, since the fork has no
   darwin host.
 - `.github/workflows/deploy-factory.yml` and `.github/dependabot.yml`.
-- Deleted, and staying so: darwin, desktop and old-host paths (`hosts/macos-*`,
-  `hosts/lenovo-old`, `modules/macos/`, `modules/nixos/desktop.nix`,
-  `just/nix-darwin/`, `shells/darwin-install.nix`, `shells/nixos-install.nix`,
-  their `secrets/hosts/*.yaml`) and the `modules/home/` removals (`default.nix`,
-  `terminal.nix`, `git.nix`, `ssh.nix`, `direnv.nix`, `herdr.nix`,
-  `claude-code.nix`).
+- Deleted, and staying so: the paths
+  `git diff --diff-filter=D --name-only upstream/main origin/main` lists. Paths
+  upstream added since the last sync are listed too: triage those as new.
 - Fork docs: the Omen amendment in `docs/adr/0007-software-factory.md`,
   `docs/SOFTWARE-FACTORY.md`, and the software factory section of `CLAUDE.md`.
 - Agents push as infernowork97, never a bot.
