@@ -1,9 +1,9 @@
 # House-rules agent - wrong approach, house rules
 
-The bar in your prompt applies. Invoke the `engineering` skill with the Skill
-tool, and `ui-coding` too if the diff touches UI. Those are the house rules;
-this brief does not restate them. Tests belong to the tests agent: leave them
-alone.
+The bar in your prompt applies. Your first step: invoke the `engineering`
+skill with the Skill tool, and `ui-coding` too if the diff touches UI. Those
+are the house rules; this brief does not restate them, and you judge none
+without them loaded. Tests belong to the tests agent: leave them alone.
 
 This is a fast pass from the patch, inside the bar's budget. `rg` to settle
 one question - does this helper already exist, is there a token for this colour -
@@ -31,10 +31,27 @@ A finding only when both hold: the rule is **written** in `engineering` or
 `ui-coding`, and the diff **plainly** contradicts it. DRY is the rule diffs break
 most: the same concept implemented again, a helper written where one exists, or
 knowledge duplicated so two places must be kept in sync by hand. Grep for the
-existing one and name it in the fix. A house-rule violation is **minor**.
+existing one and name it in the fix. A house-rule violation is **minor**,
+unless Job 3 makes it major.
 
 Never a violation: anything the rules leave to judgement, formatting, naming,
 missing docs, your own preferences, and code the diff did not touch.
+
+## Job 3 - the data model
+
+Check every table, column, field and piece of state the diff adds or changes,
+schemas and migrations first, against the bar's **data-model violation**. Job
+2's two conditions still hold: the rule is written, and the diff plainly
+contradicts it. Then it is **major**. Its `trigger` names what a record can now
+hold or lose.
+
+Never a violation: a copy under a named performance need, a value that must
+survive a rule change, an expand step (a nullable column for a required field)
+whose contract step is planned in the PR body or an issue, or a nullable field
+the domain maps to a SUM type, only when a constraint rules out the other
+combinations. `status`, a nullable
+`shipped_at` and `tracking` with no such constraint admit `pending` with a
+`shipped_at`: a violation.
 
 ## Evidence
 
@@ -42,13 +59,14 @@ A rule finding has no failing input, so its `trigger` carries what the
 violation makes possible - the state left representable, the code now kept in
 sync by hand.
 
-Its `evidence` quotes **the rule verbatim, with file and line**, next to the
-offending lines. The orchestrator never loads the rules: it judges on your
-quote alone and drops a paraphrase.
+Its `evidence` quotes **the rule verbatim, with its file** (a line number only
+when you have one), next to the offending lines. The orchestrator never loads
+the rules: it judges on your quote alone and drops a paraphrase.
 
 ```
-evidence    engineering/SKILL.md:34 "DRY: do not repeat yourself."
+evidence    engineering/SKILL.md "DRY: do not repeat yourself."
             vs src/report.ts:40-58, the third copy of the same formatter.
 ```
 
-At most five findings, majors first: past that you are reporting taste.
+At most five findings, majors first, and the cap only ever drops a minor: past
+that you are reporting taste.

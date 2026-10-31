@@ -86,11 +86,6 @@
           # the skills directory and foreground waits blocked, all else allowed.
           claude-bash-guards = import ./programs/claude-code/bash-guards-check.nix { inherit pkgs; };
 
-          # The software factory's Claude policy (billing and permission mode),
-          # its repo scripts against a real git, and on Linux its egress rules
-          # through `nft --check`.
-          software-factory = import ./programs/software-factory/check.nix { inherit pkgs; };
-
           # That the Playwright environment given to agent sessions resolves
           # `require('playwright')` from an empty directory and finds Chromium,
           # which on Linux it also launches headless.
@@ -112,6 +107,13 @@
           # turn CI red with no change to this repo. Sees only the committed
           # `.typos.toml`, never the private global allowlist.
           typos = (import ./programs/typos { inherit pkgs; }).mkCheck self;
+
+          # Static analysis of .github/: pinned actions, token permissions,
+          # credential persistence. Offline, against `.github/zizmor.yml`.
+          zizmor = import ./programs/zizmor/check.nix {
+            inherit pkgs;
+            src = self;
+          };
         }
         # That a .kt file gets kotlin_lsp running the binary programs/kotlin
         # packages, ktlint as its formatter, and that <leader>tt runs
@@ -125,6 +127,18 @@
         # session browser shared by probe processes with redacted capture.
         # Linux only, as the Darwin sandbox cannot launch Chromium.
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          # The software factory's Claude policy (billing and permission mode),
+          # its repo scripts against a real git, and its egress rules through
+          # `nft --check`. Linux only, like the factory: darwin's procps has no
+          # pgrep, which factory-ctl needs.
+          software-factory = import ./programs/software-factory/check.nix { inherit pkgs; };
+          # That the factory's home activation runs the relink: a farm factory-gc
+          # may collect is otherwise never moved off. The one check that
+          # evaluates a host, so `just quick-check` pays for it.
+          software-factory-activation =
+            assert pkgs.lib.hasInfix "factory-relink-skills"
+              self.nixosConfigurations.software-factory.config.home-manager.users.factory.home.activation.relinkClaudeSkills.data;
+            pkgs.emptyFile;
           qa = import ./programs/playwright/qa-check.nix { inherit pkgs; };
         }
       );

@@ -7,7 +7,7 @@ updates:
       day: "friday"
     # Disable the commit cooldown window so llm-agents can update
     cooldown:
-      default-days: 0
+      default-days: 0 # zizmor: ignore[dependabot-cooldown] llm-agents must update at once
     # Three groups, not one, so a nixpkgs bump that breaks the build does not
     # also hold back the cheap tool bumps.
     #
@@ -54,6 +54,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "friday"
+    cooldown:
+      default-days: 7
     groups:
       ci-updates:
         patterns:

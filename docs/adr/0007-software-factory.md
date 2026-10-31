@@ -89,11 +89,13 @@ on a `setup-token` credential, so the server holds a full login.
 These are deliberate, and recorded so they are not mistaken for oversights.
 
 - **Anything running as `factory` holds its credentials.** A prompt injection
-  that gets past the classifier can use the Claude login and the bot's GitHub
+  that gets past the classifier can use the Claude login and the agent account's GitHub
   access, merge a pull request and run `factory-ctl deploy`. That is why the
-  bot is a throwaway account, and why nothing of value beyond it lives on the
-  server.
-  On suspicion: revoke the bot's keys and token, sign the server out of the
+  account is a throwaway, and why nothing of value beyond it lives on the
+  server. `/10x-engineer` merges only a pull request the user approved in chat,
+  at the commit they approved. That is the skill's rule, not GitHub's: nobody
+  can approve their own pull request here, so GitHub requires no approval.
+  On suspicion: revoke the account's keys and token, sign the server out of the
   Claude account, rebuild.
 - **The bot can push branches that change CI workflows.** Its SSH key is not
   limited by token scopes. Workflows that run on a pushed branch can therefore
@@ -177,9 +179,16 @@ and taking no input (`modules/nixos/server/ops.nix`):
   credential to the server out of GitHub.
 - `factory-rollback`, `factory-reboot` and `factory-gc` may be started by
   `factory` through one polkit rule. GC keeps the current and previous
-  generation of every profile, which is all a rollback reaches. Dev shells are
-  not rooted (#192 chose a bigger disk over pinning them), so a GC can make
-  the next `nix develop` fetch one again from the binary caches.
+  generation of every profile, which is all a rollback reaches.
+  `factory-ctl root-shells` runs daily and roots, in `~/.gcroots/<repo>`, the
+  default dev shell and flake inputs of each repository's `origin/main`, one
+  generation each, so a GC does not send the next `nix develop` back to the
+  binary caches. `nix print-dev-env --profile` builds and roots each shell
+  without running its shellHook, which is code from the repository that an
+  unattended timer has no reason to execute. Shells of other branches stay
+  unrooted. `keep-outputs` is off:
+  it roots nothing for a `nix develop` without a profile, and would pin the
+  build-time closure of everything else that is live.
   Before collecting it unregisters the result links builds left in `/tmp` or
   a `~/.cache` for two days: Nix registers each as an indirect GC root, and
   forgotten ones once pinned 18 GB that no GC could free. Root removes only
@@ -188,8 +197,9 @@ and taking no input (`modules/nixos/server/ops.nix`):
   roots in `~/.gcroots` and `nix develop --profile` generations are left
   alone. `factory-ctl free-disk` deletes the agent's own such links without
   root, systemd-tmpfiles ages `/tmp` out after three days,
-  and an hourly check starts `factory-gc` whenever less than 10% of `/` is
-  free.
+  and an hourly check starts `factory-gc` whenever less than 15% of `/` is
+  free, above Nix's `min-free` on every size, so it fires before Nix collects
+  mid-build.
 
 ## Amendment: a laptop at home, no bot account (2026-10)
 
