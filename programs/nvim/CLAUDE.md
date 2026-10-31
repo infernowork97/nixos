@@ -8,7 +8,7 @@
 - `modules/home/languages/*.nix` — global LSP binaries and dev tools installed via Home Manager (e.g. `hls`, `fourmolu`, `vtsls`).
 - `nil_ls` is the only LSP with its binary baked into Neovim — Nix files have no project dev shell.
 
-**direnv** (enabled in `modules/home/default.nix` via `programs.direnv.nix-direnv`) auto-activates a project's dev shell on `cd`. Project flakes only need a `.envrc` containing `use flake`. This puts project-pinned LSP binaries (e.g. GHC-matched HLS) on PATH, which Neovim's lspconfig picks up automatically.
+**Project dev shells** put project-pinned LSP binaries (e.g. GHC-matched HLS) on PATH, which Neovim's lspconfig picks up automatically. The box has no direnv; agents enter a project's shell with `nix develop`.
 
 Project flakes have **no dependency on this nixos repo** — they are standalone.
 

@@ -271,8 +271,8 @@ Skills are assigned with `baseSkills` (shared by every flavor, declared in
 gets every shared skill, `ui-coding` included, because a model-invoked skill
 costs only its description until a task needs it. There are two exceptions.
 `self-improve` is in the `extraSkills` of `claude-factory` and `claude-pm` only:
-it measures the machine's own transcripts, and on the Macs it relies on the
-`python3` (3.10+) that `modules/home/terminal.nix` installs. Its analyzer
+it measures the machine's own transcripts, and it relies on the `python3`
+(3.10+) that `modules/home/factory/default.nix` installs. Its analyzer
 (`scripts/analyze.py`) is tested by `checks.self-improve` against synthetic
 transcripts, never real ones, because this repository is public.
 `10x-engineer` is in the `extraSkills` of `claude-factory` only: it runs

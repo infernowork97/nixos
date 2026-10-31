@@ -89,12 +89,13 @@ on a `setup-token` credential, so the server holds a full login.
 These are deliberate, and recorded so they are not mistaken for oversights.
 
 - **Anything running as `factory` holds its credentials.** A prompt injection
-  that gets past the classifier can use the Claude login and the agent account's GitHub
-  access, merge a pull request and run `factory-ctl deploy`. That is why the
-  account is a throwaway, and why nothing of value beyond it lives on the
-  server. `/10x-engineer` merges only a pull request the user approved in chat,
-  at the commit they approved. That is the skill's rule, not GitHub's: nobody
-  can approve their own pull request here, so GitHub requires no approval.
+  that gets past the classifier can use the Claude login and the agent
+  account's GitHub access, merge a pull request and run `factory-ctl deploy`.
+  That is why the account is a throwaway, and why nothing of value beyond it
+  lives on the server. `/10x-engineer` merges to `main` only a pull request the
+  user approved in chat, at the commit they approved. That is the skill's rule,
+  not GitHub's: nobody can approve their own pull request here, so GitHub
+  requires no approval.
   On suspicion: revoke the account's keys and token, sign the server out of the
   Claude account, rebuild.
 - **The bot can push branches that change CI workflows.** Its SSH key is not

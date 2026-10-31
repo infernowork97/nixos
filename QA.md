@@ -42,7 +42,7 @@ nvim=$(nix build --no-link --print-out-paths \
 
 - A host switch or activation. Deploys are pulled: the server takes the tip of
   `main` behind its health gate, so a PR never reaches a host. Never run
-  `darwin-rebuild`, `nixos-rebuild`, `factory-deploy` or `factory-ctl deploy`.
-- Anything needing a real secret, the macOS Keychain or a darwin host.
+  `nixos-rebuild`, `factory-deploy` or `factory-ctl deploy`.
+- Anything needing a real secret.
 - An MCP OAuth login, or a language server serving a real project: the Neovim
   checks start no server.
