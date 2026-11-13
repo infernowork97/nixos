@@ -108,7 +108,7 @@ program needs a flake input.
 
 ## Dependency Updates
 
-**`nixpkgs` tracks `nixos-26.05`**, the branch Hydra advances only once its Linux binaries are in `cache.nixos.org`. The only host is x86_64-linux.
+**`nixpkgs` tracks `nixos-26.05`. The only host is x86_64-linux.**
 
 Details: `.claude/rules/dependency-updates.md`, loaded when touching the flake.
 
@@ -141,16 +141,8 @@ Details: `.claude/rules/software-factory.md`, loaded under
 `programs/software-factory`, `modules/nixos/server` and `modules/home/factory`.
 This repository is public: no IP addresses, tailnet names or private repository
 names, ever.
-
-- **The box is an HP Omen 15-ax005 laptop at home** (`modules/nixos/server/omen.nix`),
-  installed with nixos-anywhere from the operator machine inside
-  `nix develop .#factory-install`.
-- **Agents push as infernowork97, not a bot**: `main` is guarded by a ruleset
-  (pull request required, 0 approvals). Agents run `gh pr merge` only when
-  the user asks. Merging deploys nothing; `/deploy`, the workflow or
-  `factory-ctl deploy` does.
-- **Upstream is tracked by merge commits.** ILIYANGERMANOV/nixos comes in through
-  `/sync-fork`, and that PR is never squashed.
+Upstream ILIYANGERMANOV/nixos comes in through `/sync-fork` as merge
+commits: never squash that PR.
 
 ## Neovim
 

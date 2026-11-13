@@ -23,8 +23,7 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
 
 - `lib.mkNixosServer` imports `modules/nixos/server/` and no desktop module;
   nothing else imports that directory. The agent account's Home Manager profile
-  is `modules/home/factory/`, its own import list - `modules/home/default.nix`
-  is untouched by it.
+  is `modules/home/factory/`, its own import list.
 - `programs/software-factory/` holds the logic: managed settings (billing and
   permission policy), the Remote Control launchers, `factory-ctl` (`ctl/`), the
   root deploy and maintenance scripts (`ops/`), the admin agent's project
@@ -63,4 +62,15 @@ accepted risks) and `docs/SOFTWARE-FACTORY.md` (runbook).
   private repository names or anything that maps the server's attack surface
   beyond what the Nix config itself states. Private repositories are added on
   the box with `factory-ctl start` (the admin agent's `/start-repo`).
+- **The box is an HP Omen 15-ax005 laptop at home** (`modules/nixos/server/omen.nix`):
+  systemd-boot, lid and sleep disabled, Wi-Fi through NetworkManager from the
+  `wifi-env` secret, public nameservers because the egress rules bar the agent
+  account from the LAN. It is installed with nixos-anywhere from the operator
+  machine over a wired link, inside `nix develop .#factory-install`.
+- **Agents push as infernowork97, not a bot**: `main` is guarded by a ruleset
+  (pull request required, 0 approvals). Agents run `gh pr merge` only when
+  the user asks. Merging deploys nothing; `/deploy`, the workflow or
+  `factory-ctl deploy` does, and an agent can run the last one itself.
+- **Upstream is tracked by merge commits.** ILIYANGERMANOV/nixos comes in through
+  `/sync-fork`, and that PR is never squashed.
 - Recipes are in `just/software-factory.just`.

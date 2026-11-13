@@ -13,9 +13,8 @@ requests.
   request with `gh pr create`. `main` is protected and the push would be
   rejected anyway. Never change git's push or tracking config: a bare
   `git push` under `push.default upstream` pushed to `main`.
-- Merge a pull request with `gh pr merge` only when the user asks for it.
-  Never merge on your own, and never enable auto-merge. Under `/10x-engineer`,
-  the user's chat approval of a named PR is that ask.
+- Run `gh pr merge` only when the user asks; never enable auto-merge. Under
+  `/10x-engineer`, their chat approval of a named PR is that ask.
 - Flakes only see files git tracks. Run `git add -N <new files>`
   (intent-to-add, nothing really staged) before any `nix build`, `nix run` or
   `nix develop` that needs them.
