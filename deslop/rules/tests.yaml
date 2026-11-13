@@ -74,8 +74,6 @@ rules:
       - "just/scripts/factory-status.sh"
       # Interactive, writes secrets, and needs sudo on the operator machine.
       - "just/scripts/factory-secrets.sh"
-      # Wipes and installs the box over its install link.
-      - "just/scripts/factory-install.sh"
       # Hands the key over through the operator machine's clipboard.
       - "just/scripts/factory-generate-age-key.sh"
     exists:
