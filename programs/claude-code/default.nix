@@ -30,8 +30,13 @@ let
   statusline = import ./statusline.nix { inherit pkgs theme; };
   readGuard = import ./read-guard.nix { inherit pkgs; };
   waitGuard = import ./wait-guard.nix { inherit pkgs; };
+  contextGuard = import ./context-guard.nix { inherit pkgs; };
   playwright = import ../playwright { inherit pkgs; };
   linkSkills = import ../skills-link { inherit pkgs; };
+  renderAgents = import ./agents.nix { inherit pkgs lib; };
+
+  model = "opus";
+  effortLevel = "medium";
 
   baseSettings = {
     statusLine = {
@@ -39,8 +44,10 @@ let
       command = "${statusline}/bin/claude-statusline";
     };
     autoMemoryEnabled = false;
-    effortLevel = "high";
-    model = "opus";
+    # In user settings the top-level key only reaches a fixed list of older
+    # models. Opus 5.5 and later read modelSettings, which also takes an alias.
+    inherit effortLevel model;
+    modelSettings.${model} = { inherit effortLevel; };
     theme = "auto";
   };
 
@@ -97,9 +104,9 @@ let
   # that flavor's `extraSkills`.
   baseSkills = [
     "address-pr-feedback"
+    "architect"
     "engineer"
     "engineering"
-    "explain"
     "final-review"
     "give-feedback"
     "grill-with-docs"
@@ -110,6 +117,7 @@ let
     "pragmatic-review"
     "qa"
     "refactor"
+    "researcher"
     "setup-matt-pocock-skills"
     "skeptic"
     "sync-fork"
@@ -127,40 +135,93 @@ let
       ;
   };
 
-  # The skill listing goes out on every call, and most of it was skills an
-  # unattended agent has no use for. name-only drops the description, and the
-  # model can still invoke the skill; user-invocable-only hides it from the
-  # model and keeps /name. Claude.ai's synced skills are keyed with their
-  # anthropic-skills: prefix, bundled ones without.
-  skillOverrides =
-    let
-      synced = map (name: "anthropic-skills:${name}");
-    in
-    lib.genAttrs (synced [
+  # The skill listing goes out on every call, and nothing here was ever invoked
+  # by a factory agent. user-invocable-only hides a skill from the model and
+  # keeps /name. Claude.ai's synced skills are keyed with their anthropic-skills:
+  # prefix, bundled ones without. checks.claude-config fails if a catalog skill
+  # lands on this list.
+  skillOverrides = lib.genAttrs (
+    map (name: "anthropic-skills:${name}") [
+      "built-in-browser"
+      "chrome-browser"
+      "computer-use"
+      "deep-research"
       "docs"
       "docx"
+      "google-workspace"
+      "import-memory"
+      "morning"
       "pptx"
+      "skill-creator"
       "xlsx"
-    ]) (_: "name-only")
-    // lib.genAttrs (
-      synced [
-        "built-in-browser"
-        "chrome-browser"
-        "computer-use"
-        "google-workspace"
-        "import-memory"
-        "morning"
-      ]
-      ++ [
-        "keybindings-help"
-        "loop"
-        "schedule"
-      ]
-    ) (_: "user-invocable-only");
+    ]
+    ++ [
+      "code-review"
+      "dataviz"
+      "fewer-permission-prompts"
+      "init"
+      "keybindings-help"
+      "loop"
+      "plugin-authoring"
+      "run"
+      "schedule"
+      "security-review"
+      "simplify"
+      "update-config"
+      "workflow-authoring"
+    ]
+  ) (_: "user-invocable-only");
+
+  # The factory's subagents get this on top of the shared records, and no other
+  # host does.
+  factoryAgentInstructions = ./factory-core.md;
+
+  agentSources = renderAgents agents.subagents.all [ ];
+  factoryAgentSources = renderAgents agents.subagents.all [ factoryAgentInstructions ];
+
+  # `force`: a dev shell may have installed a plain copy here, see
+  # shellActivationScript. Home Manager would keep backing it up, and abort once
+  # a backup already exists.
+  toHomeFiles = lib.mapAttrs' (
+    name: source:
+    lib.nameValuePair ".claude/agents/${name}.md" {
+      inherit source;
+      force = true;
+    }
+  );
+
+  # What one kind of agent starts with and reads for its work, on top of what
+  # every agent carries, for the size budget: files, by path. A role counts at
+  # its largest, the factory's render. Keyed by the records, so a new role has no
+  # ceiling in budget.json and fails the check until it gets one.
+  budgetLoads =
+    let
+      inherit (agents.skills) all;
+      review = "${all.pragmatic-review}/references";
+      # A role's references, beyond the skills it preloads.
+      reads = {
+        reviewer = [
+          "${review}/bar.md"
+          "${review}/blockers.md"
+        ];
+        review-lead = [
+          "${review}/first-pass.md"
+          "${review}/bar.md"
+        ];
+      };
+      roleLoad =
+        name: role:
+        [ factoryAgentSources.${name} ]
+        ++ map (skill: "${all.${skill}}/SKILL.md") role.skills
+        ++ reads.${name} or [ ];
+    in
+    lib.mapAttrs roleLoad agents.subagents.all // { repo-instructions = [ ../../CLAUDE.md ]; };
 
   baseSettingsFile = pkgs.writeText "claude-base-settings.json" (builtins.toJSON baseSettings);
 in
-{
+rec {
+  inherit statusline;
+
   # One entry per flavor; the attr name is the binary name. Everything is
   # optional - `claude` is the base configuration with nothing added.
   packages = mkClaudeFlavors {
@@ -208,7 +269,10 @@ in
   factory = {
     wrapper = builtins.head (mkClaudeFlavors {
       claude-factory = {
-        extraInstructions = [ ./factory-instructions.md ];
+        extraInstructions = [
+          factoryAgentInstructions
+          ./factory-instructions.md
+        ];
         # Other sessions keep running while this one starts, and read the
         # directory the stock rm -rf would empty under them.
         applySkills = farm: "${lib.getExe linkSkills} ${farm}";
@@ -223,9 +287,14 @@ in
         # Unattended agents dumped whole files with `cat` and Read, and
         # subagents blocked on foreground sleeps and polling loops despite
         # the instructions; the hooks make them read ranges and background
-        # long commands instead.
+        # long commands instead, keep subagents off CI, and name the context
+        # budget when an agent crosses it.
         extraSettings = {
           inherit skillOverrides;
+          # The Claude Docs connector, used once ever and paid for on every call.
+          # claude-code-remote is not a connector: Remote Control's bridge
+          # delivers it, so add_repo and subscribe_pr_activity stay.
+          disableClaudeAiConnectors = true;
           hooks.PreToolUse = [
             {
               matcher = "Bash";
@@ -239,6 +308,7 @@ in
               hooks = [ readGuard.hook ];
             }
           ];
+          hooks.PostToolUse = [ { hooks = [ contextGuard.hook ]; } ];
           enabledPlugins = {
             "typescript-lsp@claude-plugins-official" = true;
           };
@@ -246,6 +316,34 @@ in
       };
     });
     unwrapped = claude-code;
+    agentFiles = toHomeFiles factoryAgentSources;
+  };
+
+  # The hook guards as they deploy, for `python-tests` to run.
+  guards = {
+    read = readGuard.bin;
+    wait = waitGuard.bin;
+    secret = (import ./secret-guard.nix { inherit pkgs; }).bin;
+    context = contextGuard.bin;
+  };
+
+  # home.file entries for the subagents. Every flavor of a profile gets the same
+  # ones, so unlike skills they need no per-flavor relink. The factory profile
+  # installs `factory.agentFiles` instead.
+  agentFiles = toHomeFiles agentSources;
+
+  # checks.claude-config: this configuration against its size ceilings. See
+  # config-check.nix.
+  check = import ./config-check.nix {
+    inherit pkgs lib;
+    inherit (agents.skills) frontmatter;
+    hiddenSkills = lib.attrNames skillOverrides;
+    skillNames = agents.skills.names;
+    flavors = packages ++ [ factory.wrapper ];
+    inherit baseSkills agentSources factoryAgentSources;
+    roleSkills = lib.concatMap (role: role.skills) (lib.attrValues agents.subagents.all);
+    loads = budgetLoads;
+    ceilings = ./budget.json;
   };
 
   # Writes the base settings and instructions on every rebuild so both files
@@ -259,5 +357,16 @@ in
     mkdir -p "$HOME/.claude"
     install -m 600 ${baseSettingsFile} "$HOME/.claude/settings.json"
     install -m 600 ${baseInstructions} "$HOME/.claude/CLAUDE.md"
+  '';
+
+  # activationScript for a dev shell, where no Home Manager places `agentFiles`:
+  # the install shells run on machines that have none yet.
+  shellActivationScript = activationScript + ''
+    mkdir -p "$HOME/.claude/agents"
+    ${lib.concatStrings (
+      lib.mapAttrsToList (name: source: ''
+        install -m 600 ${source} "$HOME/.claude/agents/${name}.md"
+      '') agentSources
+    )}
   '';
 }

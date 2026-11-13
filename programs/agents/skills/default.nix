@@ -11,6 +11,7 @@ let
     mergeSources
     mkSkillFarm
     mkCheck
+    frontmatter
     ;
 
   # Third-party skill sets. Each source says where to search and exactly which
@@ -37,12 +38,6 @@ let
         "grill-me" # non-code variant of grill-with-docs
         "setup-matt-pocock-skills" # per-repo setup, run once via /setup-matt-pocock-skills
       ];
-
-      # Resolves a collision deliberately - e.g. upstream ships `code-review`,
-      # which as a personal skill would shadow Claude Code's bundled
-      # /code-review. A rename also rewrites the frontmatter `name`, keeping it
-      # in step with the directory that supplies the command name.
-      rename = { };
     };
   };
 
@@ -52,9 +47,9 @@ let
     "10x-engineer" # /10x-engineer - run delegated engineers across issues and repos, merge what the user approved, factory only
     "android" # Android and Kotlin Multiplatform builds on the factory's global toolchain, factory only
     "address-pr-feedback" # /address-pr-feedback - answer PR review threads, explicit invocation only
+    "architect" # /architect - read-only design partner led in free text, hands changes to /engineer, explicit invocation only
     "engineer" # /engineer - deliver a feature end to end; also invoked by 10x-engineer, so model-invocable
     "engineering" # coding style and engineering principles, model-invoked on any code work
-    "explain" # /explain - plain-words explanation of a PR, diff or concept, read-only, explicit invocation only
     "final-review" # /final-review - independent last review of a ready PR, the user answers the pickers
     "give-feedback" # /give-feedback - apply quick bulleted feedback to a PR in rounds, explicit invocation only
     "grilling" # fork of mattpocock's grilling, one picker question at a time; grill-me and grill-with-docs delegate to it
@@ -62,6 +57,7 @@ let
     "pragmatic-review" # /pragmatic-review - diff and PR review; also invoked by engineer
     "qa" # /qa - plan, run and record QA proof on a PR, report-only on bugs, only when the user asks
     "refactor" # /refactor - behaviour-preserving cleanup of a diff; also invoked by engineer
+    "researcher" # /researcher - bounded research with a notes file; preloaded by the researcher agent
     "self-improve" # /self-improve - measure past sessions and fix the agent setup's bottlenecks, factory and claude-pm only
     "skeptic" # /skeptic - fail-fast feasibility review, explicit invocation only
     "sync-fork" # /sync-fork - merge ILIYANGERMANOV/nixos into this fork, explicit invocation only
@@ -69,12 +65,17 @@ let
   ];
 
   # Custom skills go through the same resolution as external sources so they get
-  # the same collision detection, rename support and validation.
+  # the same collision detection and validation.
   customSource = {
-    src = ./.;
+    # A script's test sits beside it and stays out of the deployed skill.
+    src = lib.fileset.toSource {
+      root = ./.;
+      fileset = lib.fileset.difference ./custom (
+        lib.fileset.fileFilter (file: lib.hasPrefix "test_" file.name && file.hasExt "py") ./custom
+      );
+    };
     roots = [ "custom" ];
     skills = custom;
-    rename = { };
   };
 
   all = mergeSources (
@@ -105,4 +106,7 @@ in
   # The same validation for skills outside this catalog, such as the factory
   # admin agent's project-scoped ones.
   inherit mkCheck;
+
+  # For checks outside this catalog that parse a markdown file's frontmatter.
+  inherit frontmatter;
 }

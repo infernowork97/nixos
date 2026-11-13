@@ -2,3 +2,9 @@
 result
 result-*
 deslop/diagram/
+programs/playwright/node_modules/
+programs/playwright/dist/
+.mutation/
+programs/playwright/reports/
+programs/playwright/.stryker-tmp/
+.direnv/

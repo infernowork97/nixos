@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2154 # set by another fragment: the assembled script is checked whole
 # crash-log: the kernel crash dumps the root unit factory-crash-log copied out
 # of pstore at boot (programs/software-factory/ops/crash-log.sh). Read-only.
 

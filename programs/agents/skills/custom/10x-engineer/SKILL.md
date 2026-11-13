@@ -1,6 +1,6 @@
 ---
 name: 10x-engineer
-description: Runs a team of engineers as a principal engineer - takes issues, PR links or a big goal across repos, researches, spikes blockers, interviews the user, confirms a task breakdown, runs up to 3 delegated /engineer subagents in worktrees, rules on what is settled and escalates the rest with context, owns CI, QA and hand-over, keeps a batched review queue, merges what the user approved head-bound and never on red, and finishes with a fresh-context audit. Durable ledger under ~/.10x, resumable with `resume`. Factory only, invoked by the user.
+description: Runs a team of engineers as a principal engineer - takes issues, PR links or a big goal across repos, researches, spikes blockers, interviews the user, confirms a task breakdown with a Quality per task, runs up to 3 delegated /engineer subagents in worktrees, rules on what is settled and escalates the rest with context, owns CI, QA and hand-over, keeps a batched review queue, merges what the user approved head-bound and never on red, and finishes with a fresh-context audit. Durable ledger under ~/.10x, resumable with `resume`. Factory only, invoked by the user.
 argument-hint: "[issues, PR links, a goal] | resume [run]"
 disable-model-invocation: true
 ---
@@ -60,11 +60,14 @@ leave that repo out and tell the user.
 
 ### 2. Research
 
-List what you need to know and group it into topics, as /engineer step 1 does.
-One research subagent per group, in the background, given each repo's clone
-path. Notes go to `/tmp/<unique-dir>/`; each hands back a ranked index plus the
-path. Check that each repo's CI runs on PRs to `epic/*` before planning an epic
-there; if it does not, say so in the breakdown.
+List what you need to know, the standards that apply included, and group it
+into topics; you plan them yourself. A
+task that plainly qualifies as Trivial needs none. One `subagent_type: researcher`
+agent per group, in the background, given each repo's clone path, with notes
+under `/tmp/<unique-dir>/`. Its prompt and how many agents a Quality gets:
+`## Callers` and `## Budget` in `~/.claude/skills/researcher/SKILL.md`, those
+sections only. Check that each repo's CI runs on PRs to `epic/*` before planning
+an epic there; if it does not, say so in the breakdown.
 
 ### 3. Spikes
 
@@ -81,9 +84,11 @@ breakdown in the ledger and show it, phone-sized:
 
 | Field | Value |
 |---|---|
-| Task | one deliverable, its issues, acceptance criteria |
+| Task | one deliverable, its issues, acceptance criteria, the standards it follows |
 | Repo, deps, wave | what must merge first |
 | Shape | independent PR to `main`, or child of `epic/<name>` |
+| Quality | POC, Balanced or Max; ask unless told, Balanced recommended; a Trivial task needs no question |
+| Trivial | yes when it qualifies by your instructions' rule: your call, never a question |
 | QA | yes or no |
 | Heavy | Gradle or Next.js build: yes or no |
 | Security-sensitive | topics from `ci`, `auth`, `database`, `secrets`, or none |
@@ -95,7 +100,8 @@ signal: sequence tasks only for a real semantic dependency. An interface two
 tasks share is written into both briefs before they start.
 
 Use an epic when children depend on each other or must ship together;
-otherwise independent PRs. Confirm with one `AskUserQuestion` ("Yes, start
+otherwise independent PRs. A Trivial task stays in the table, the pre-flight and
+the confirmation. Confirm with one `AskUserQuestion` ("Yes, start
 (Recommended)" / "No, adjust"), repeating until clear. No engineer starts
 before this, except a base fix (section 7). Record the confirmation in the
 ledger.
@@ -105,10 +111,12 @@ ledger.
 Dispatch by wave, dependencies first:
 
 - At most 3 subagents at once and one heavy task at a time, whatever the job:
-  fixers and `final-review` count, a heavy task's fixer as heavy. A slot is free
+  fixers count, a heavy task's fixer as heavy. A slot is free
   only when both caps hold; the rest stay `queued`. A task with an unmerged
   dependency or an open decision waits.
 - Worktree, brief and spawn prompt: `${CLAUDE_SKILL_DIR}/references/brief.md`.
+- A Trivial task is one engineer on the fast track, under the same caps. A fix
+  that qualifies gets `, Trivial` too, whatever its task's Quality.
 
 ### 6. Triage hand-backs
 
@@ -121,6 +129,9 @@ task's `Held` notes, and fill the free slot.
 | `NEEDS_DECISION <question>` | Rule or escalate, below |
 | `BLOCKED <reason>` | Clear it if the brief or a tool can, else escalate |
 | `FAILED <reason>` | Failures |
+
+A hand-back saying `Trivial dropped: <why>` is not a decision: set the task's
+`Trivial` to no, one way, and put the why in its queue entry.
 
 **Rule** only when both hold: the brief, plan, repo rules or an earlier user
 answer settle it, and it is cheap to undo. Log
@@ -148,7 +159,8 @@ later status never closes it. Other tasks keep moving.
 
 For each `READY` PR, the steps /engineer leaves to a session that can ask. Read
 `### 10. Hand over` in `~/.claude/skills/engineer/SKILL.md` once for the exact
-gates; do not invoke that skill.
+gates; do not invoke that skill. A Trivial task takes every step here and section
+9's gates unchanged.
 
 1. `subscribe_pr_activity`, then `gh pr checks <n> --repo <owner>/<repo>` once,
    because events before the subscription never arrive. Pending: end the turn.
@@ -169,15 +181,16 @@ gates; do not invoke that skill.
    green; other repos go on. Otherwise **branch**: a fresh fixer per
    `${CLAUDE_SKILL_DIR}/references/brief.md`, then wait again. A fixer that
    cannot fix it is a failed try.
-3. Green with QA yes and no result yet: state `qa`, send a ready `/qa <PR URL>`
+3. Green on a POC task: it stays a labelled draft and never reaches the queue or
+   the merge loop. `parked POC <PR URL>`, notify. A task depending on it opens
+   one decision: retry it or re-plan. Retrying it at a higher Quality is the
+   user's call: remove the `POC` label, then a fresh engineer from its PR at
+   step 6.
+4. Green with QA yes and no result yet: state `qa`, send a ready `/qa <PR URL>`
    line for a fresh session, push it, and wait for the user's result. A Fail
    goes to the user. QA no: go on. Never offer to run the app: run it only when
    the user asks, on a port in 3000-3099, and give the URL.
-4. The `gh pr ready` gates from that section, then `gh pr ready`.
-5. On a PR to `main` on the sensitive tier (the `Security:` line in the report
-   file), run `final-review` once, in a free slot, before the task enters the
-   queue, with the report file's requirements; the user answers its pickers. On
-   other tiers the queue offers `/final-review` once.
+5. The `gh pr ready` gates from that section, then `gh pr ready`.
 6. State `review`: the queue, or the merge loop when the Approved gate already
    holds.
 
@@ -193,6 +206,7 @@ order, safest first:
    Risk: <low/medium/high and why>
    Rulings: <each, or none>
    QA: <passed / no / /qa line>
+   Optional: /final-review --requirements <its file> <PR URL>
 ```
 
 The user approves here in chat, naming each PR. GitHub cannot carry that:
@@ -222,10 +236,10 @@ send the final report: merged, parked and why, rulings to look at, follow-ups.
 - Children of a later wave branch from the epic.
 - After the last child, open the final PR to `main` with `pr-description`. It
   lists every `Closes #n`, since issues auto-close only on the default branch.
-  Give it a ledger row and a worktree, so a fixer can rebase it. It then runs
-  sections 7 to 9 like any PR, with its requirements and `Security:` line from
-  the children's reports: the user reviews it and approves. Its queue entry
-  summarises per child: PR link, what, rulings, QA.
+  Give it a ledger row and a worktree, so a fixer can rebase it. Join the merged
+  children's requirements files into its `reports/<task>-requirements.md`. It
+  then runs sections 7 to 9 like any PR: the user reviews it and approves. Its
+  queue entry summarises per child: PR link, what, rulings, QA.
 - A parked child holds the final PR. Escalate once, as an open decision: retry
   it, ship the rest as a partial final PR, or drop the child. A partial final PR
   leaves the parked child's issues out of `Closes`.
@@ -261,7 +275,7 @@ candidates: ask. Subagents and subscriptions die with the session, so:
 3. A `running` task's worker is gone, and its job says what it was doing:
    - A fixer whose `<head>` is no longer the live head pushed: a rebase takes
      Rebase in `${CLAUDE_SKILL_DIR}/references/merge.md`, any other `ci`.
-   - Any other fixer, or `final-review`: a fresh one for that job.
+   - Any other fixer: a fresh one for that job.
    - `engineer`: read its last step from its report file. Step 10 means it
      finished: `READY`, section 7. Otherwise a fresh engineer from its PR, or
      from its worktree when no PR exists yet, at the next step.

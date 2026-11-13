@@ -66,7 +66,11 @@ On the box:
     endpoint. The units also unset those variables.
   - Sessions start in auto mode, where a classifier reviews actions, and bypass
     mode cannot be entered.
-  - Deny rules cover pushing to `main` and reading the credentials.
+  - Deny rules cover pushing to `main`, plain force pushes and reading the
+    credentials.
+  - An `autoMode.allow` exception lets the classifier pass
+    `git push --force-with-lease` to a feature branch, which rebasing a pull
+    request needs. The classifier still judges where the push goes.
   - Deny rules match command text and are not a boundary, so they are a
     backstop to the classifier and to the account's own lack of privilege.
 - Nix builds are always sandboxed, and `factory` is an allowed but never a
@@ -151,7 +155,7 @@ others, serving `~/admin` instead of a repository.
   would reach the repository agents too.
 - **One tested CLI.** Every skill calls `factory-ctl`, which is idempotent,
   refuses with exit code 2 whatever would end live sessions or touch worktrees
-  with local work, and is exercised by `checks.software-factory`. The skills
+  with local work, and is exercised by `checks.shell-tests`. The skills
   add judgement - which repository, whether to force - and phone-sized output.
 - **Always on.** `claude-rc-admin` is outside the enabled set, restarts
   always, and keeps its memory with `MemoryMin`. A deploy does not restart it
@@ -180,7 +184,8 @@ and taking no input (`modules/nixos/server/ops.nix`):
   credential to the server out of GitHub.
 - `factory-rollback`, `factory-reboot` and `factory-gc` may be started by
   `factory` through one polkit rule. GC keeps the current and previous
-  generation of every profile, which is all a rollback reaches.
+  generation of every profile, which is all a rollback reaches. It trims a
+  user's profiles as that user, since the paths there are that user's to choose.
   `factory-ctl root-shells` runs daily and roots, in `~/.gcroots/<repo>`, the
   default dev shell and flake inputs of each repository's `origin/main`, one
   generation each, so a GC does not send the next `nix develop` back to the

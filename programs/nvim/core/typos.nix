@@ -10,6 +10,11 @@ in
     # no project dev shell would ever put this binary on PATH.
     package = pkgs.typos-lsp;
 
+    # Neovim debounces a buffer by the smallest value among its clients, and
+    # this one attaches everywhere: at the default 150 it would undo
+    # basedpyright's 500 (programs/nvim/languages/python.nix).
+    extraOptions.flags.debounce_text_changes = 500;
+
     extraOptions.init_options = {
       # Layered on top of whatever `.typos.toml` the workspace provides — the
       # editor equivalent of the CLI's `--config`. See programs/typos.
@@ -26,7 +31,7 @@ in
     {
       mode = "n";
       key = "<leader>ad";
-      action = "<cmd>lua TyposAddWord()<CR>";
+      action = "<cmd>lua _G.TyposAddWord()<CR>";
       options.desc = "Add word to typos allowlist";
     }
   ];
@@ -124,7 +129,7 @@ in
       return root .. "/.typos.toml"
     end
 
-    function TyposAddWord()
+    _G.TyposAddWord = function()
       local word = flagged_word()
       if not word then
         vim.notify("typos: no typo under the cursor", vim.log.levels.WARN)
