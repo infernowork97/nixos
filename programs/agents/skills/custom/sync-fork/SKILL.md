@@ -26,10 +26,14 @@ nothing is new: tell the user and stop.
 
 The cut is `upstream/main` unless the range is big: dozens of commits, or a
 rewrite (a commit that deletes or moves files most later commits build on).
-Then propose as the cut the commit just before the rewrite, or before the
-point where triage stops fitting one PR, and ask the user with
-`AskUserQuestion`. The next sync starts after the cut, since the merge makes
-it an ancestor of `main`.
+Then propose a cut just before the first commit that touches much of the
+protected surface, before a rewrite that is not the range's first commit, or
+before the point where triage stops fitting one PR. When the rewrite is the
+first new commit, the cut is at or after it. Compare candidates by their
+conflicts, each with
+`git merge-tree --write-tree --name-only origin/main <candidate>`, and ask the
+user with `AskUserQuestion`. The next sync starts after the cut, since the
+merge makes it an ancestor of `main`.
 
 ## 3. Triage
 
@@ -42,6 +46,9 @@ verdict: **take**, **adapt** or **skip**. A theme is done when it answers each o
 - Flake: new inputs, and anything that would change `flake.lock`.
 - Secrets: anything touching `.sops.yaml`, `secrets/` or a secret's declaration.
 - Deleted paths: changes under a path in the protected surface's deleted list.
+- Runtime settings: every change to what a session runs with (`effortLevel`,
+  connectors, hooks, permissions and other settings) is listed as its own
+  theme for the user to decide. A clean merge brings them in silently.
 
 ## 4. Ask
 
@@ -52,17 +59,20 @@ protected surface yourself.
 ## 5. Merge
 
 ```sh
-git switch -c sync-upstream-<yyyy-mm> origin/main
+git switch -c sync-upstream-<cut short sha> origin/main
 git merge --no-ff --no-commit <cut>
 ```
 
-Commit it as `Merge upstream <short sha> (#<pr>) into the fork`.
-
 Resolve conflicts. A protected path keeps the fork's side, and a path the fork
-deleted stays deleted, even with upstream's edits on it. Revert each skipped
+deleted stays deleted, even with upstream's edits on it. Where upstream
+deleted, moved or renamed a file the fork edited, carry the fork's edit to the
+file's new home and drop the old file. Revert each skipped
 change here, so it is part of the merge: `git checkout origin/main -- <path>`
 for a path `origin/main` has, `git rm -f <path>` for one upstream added, or by
 hand. A cherry-pick or a squash would fork the history from upstream.
+
+Then commit it as `Merge upstream <cut short sha> (#<pr>) into the fork`,
+where `#<pr>` is upstream's PR number from the cut commit's subject.
 
 Adapt merged text to the fork in a follow-up commit: paths, hosts and identity
 it names. Fork-only code meets the lint, format and test rules upstream brings:
@@ -77,9 +87,10 @@ Complete when every check below passes on the final commit:
    `git rev-list --count <cut>..upstream/main` equals
    `git rev-list --count HEAD..upstream/main`.
 2. Each entry of the protected surface: read
-   `git diff origin/main HEAD -- <path>`, and read
-   `git diff --diff-filter=A --name-only origin/main HEAD` for deleted paths
-   that came back. Each difference is a change the user or triage accepted.
+   `git diff origin/main HEAD -- <path>`. Deleted paths that came back are
+   the paths both in `git diff --diff-filter=A --name-only origin/main HEAD`
+   and in the fork's deletions; there are none. Each difference is a change
+   the user or triage accepted.
 3. Each skipped theme: for every path its commits touch
    (`git show --name-only --format= <commit>`), read
    `git diff origin/main HEAD -- <path>`. Each is empty, or its difference
@@ -98,7 +109,9 @@ these commits.** Wait for green CI and report the PR. The user merges it.
 
 ## Protected surface
 
-The fork's side wins here unless the user says otherwise.
+The fork's side wins here unless the user says otherwise. Protection follows
+a file through a move or rename (`git log --follow`): the merge-only rule in
+`factory-core.md` may live in `programs/agents/profiles/factory/agent.md`.
 
 - `hosts/software-factory/`, including the infernowork97 identity and
   `deploy.repo`.
@@ -111,9 +124,8 @@ The fork's side wins here unless the user says otherwise.
   has no darwin host.
 - `.github/workflows/deploy-factory.yml`: its gate names exactly jobs
   `check.yml` has, or every deploy blocks. `.github/dependabot.yml`.
-- Deleted, and staying so: the paths
-  `git diff --diff-filter=D --name-only <cut> origin/main` lists. Paths
-  upstream added since the last sync are listed too: triage those as new.
+- Deleted, and staying so: the fork's deletions,
+  `git diff --diff-filter=D --name-only $(git merge-base origin/main <cut>) origin/main`.
 - Fork docs: the Omen amendment in `docs/adr/0007-software-factory.md`,
   `docs/SOFTWARE-FACTORY.md`, and the fork facts in `CLAUDE.md` and
   `.claude/rules/software-factory.md`.
