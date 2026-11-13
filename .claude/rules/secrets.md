@@ -26,7 +26,7 @@ paths:
 Every secret has a **scope**, which picks the file it is read from:
 `global` -> `secrets/common.yaml` (every host), `host` -> `secrets/hosts/<hostname>.yaml`
 (only hosts that declare it). Names are bare: `figma-token`, never
-`figma-token-macos-work`. The file already says which host it belongs to.
+`figma-token-software-factory`. The file already says which host it belongs to.
 
 `modules/secrets.nix` holds the registry, the age key path and the expansion
 into `sops.secrets`. A host declares what it provides in one line

@@ -29,11 +29,10 @@ vacuously for none. This is the only mechanism that gates a server to a host.
 machine. There is no secret to inject, so a remote server carries `env = { }`
 and is available on every host. **A remote server cannot be host-gated by the
 secrets mechanism.** Keeping one off a machine means not running a flavor that
-lists it - which is why `claude-pm` exists on `macos-main` but is simply not
-used there.
+lists it on that host.
 
-The OAuth grant lives in the **macOS Keychain** (on Linux,
-`~/.claude/.credentials.json`) under a key derived from the server's `name`,
+The OAuth grant lives in `~/.claude/.credentials.json` (the Keychain on
+macOS) under a key derived from the server's `name`,
 `type`, `url` and `headers`. Nothing about it is in `~/.claude.json`, which is
 why the wrapper replacing `.mcpServers` wholesale on every launch cannot lose
 it, and why switching flavors never forces a re-login. Two things do orphan a
@@ -70,7 +69,7 @@ nixpkgs' `playwright-test` version. Tests sit beside the code as `*.test.ts`;
 
 `secretFiles` maps an env var to a secret **name**, for a program that reads
 the file itself: the wrapper exports the decrypted file's **path**, never its
-value (`QA_EVM_KEY_FILE` -> `qa-sepolia-key`, declared on `macos-work` only).
+value (`QA_EVM_KEY_FILE` -> `qa-sepolia-key`, declared on no host today).
 A host without the secret gets no variable. Where one is exported,
 `withSecretFileGuard` in `lib.nix` adds `Read` deny rules over the secrets
 directory (`/run/secrets` and the `/run/secrets.d` it resolves to) and the
