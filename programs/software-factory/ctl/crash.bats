@@ -20,16 +20,27 @@ add_dump() {
   factory-ctl crash-log | grep -q "No kernel crash dumps saved." || fail "an empty pstore left a dump"
 }
 
-@test "crash-log: lists the dumps newest first and shows the newest one's last 80 lines" {
+given_three_dumps() {
   add_dump 1700000000 001 '3 days ago'
   add_dump 1700000000 002 '2 days ago'
   add_dump 1800000000 001 '1 hour ago'
   factory-crash-log
+}
+
+@test "crash-log: lists the dumps newest first" {
+  given_three_dumps
 
   factory-ctl crash-log >"$work/out"
 
   [ "$(sed -n 's/^  \([^ ]*\.txt\)  .*/\1/p' "$work/out" | paste -sd ' ')" = "1800000000-001.txt 1700000000-002.txt 1700000000-001.txt" ] ||
     fail_showing "$work/out" "the dumps are not listed newest first"
+}
+
+@test "crash-log: shows only the newest dump's last 80 lines" {
+  given_three_dumps
+
+  factory-ctl crash-log >"$work/out"
+
   { grep -qxF "1800000000 line 21" "$work/out" && grep -qxF "1800000000 line 100" "$work/out"; } ||
     fail_showing "$work/out" "the newest dump's tail is missing"
   ! grep -qxF "1800000000 line 20" "$work/out" || fail "more than 80 lines were shown"
