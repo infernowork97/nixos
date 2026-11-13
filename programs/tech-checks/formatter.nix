@@ -28,6 +28,8 @@ pkgs.treefmt.withConfig {
   settings = {
     # treefmt warns by default, too loud for a repo where most files have no formatter.
     on-unmatched = "info";
+    # Vendored skills, kept as their authors ship them.
+    global.excludes = [ ".agents/**" ];
     formatter = {
       nixfmt = {
         command = "nixfmt";

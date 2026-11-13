@@ -47,6 +47,9 @@ rules:
       # Test doubles for the bats suites.
       - "programs/software-factory/fakes/**"
 
+      # Vendored third-party skills, kept as their authors ship them.
+      - ".agents/**"
+
       # Straight-line build phases with no branch: a broken one fails its package.
       - "programs/kotlin/lsp-install.sh"
       - "programs/playwright/install-compiled.sh"
@@ -71,6 +74,8 @@ rules:
       - "just/scripts/factory-status.sh"
       # Interactive, writes secrets, and needs sudo on the operator machine.
       - "just/scripts/factory-secrets.sh"
+      # Wipes and installs the box over its install link.
+      - "just/scripts/factory-install.sh"
       # Hands the key over through the operator machine's clipboard.
       - "just/scripts/factory-generate-age-key.sh"
     exists:

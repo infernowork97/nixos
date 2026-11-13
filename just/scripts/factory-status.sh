@@ -2,8 +2,11 @@
 set -euo pipefail
 mode=$1
 case "$mode" in
-    concise | detailed) ;;
-    *) echo "ERROR: expected 'concise' or 'detailed', got '$mode'" >&2; exit 1 ;;
+  concise | detailed) ;;
+  *)
+    echo "ERROR: expected 'concise' or 'detailed', got '$mode'" >&2
+    exit 1
+    ;;
 esac
 
 # The remote side runs without -e or pipefail, so one failing section
@@ -84,7 +87,7 @@ top_memory() {
 
 main "$1"
 EOF
-    status=$?
-    [ "$status" -ne 255 ] || echo "ERROR: could not reach software-factory. Is Tailscale up? (tailscale up)" >&2
-    exit "$status"
+  status=$?
+  [ "$status" -ne 255 ] || echo "ERROR: could not reach software-factory. Is Tailscale up? (tailscale up)" >&2
+  exit "$status"
 }

@@ -26,15 +26,16 @@ let
   source = fileset: lib.fileset.toSource { inherit root fileset; };
 
   # Every shell script in the repository, so a new one is covered by existing.
-  # bats suites and their `load`ed helpers are shell too.
-  shellFiles = lib.fileset.fileFilter (
+  # bats suites and their `load`ed helpers are shell too. Vendored skills in
+  # .agents stay as their authors ship them.
+  shellFiles = lib.fileset.difference (lib.fileset.fileFilter (
     file:
     lib.any file.hasExt [
       "sh"
       "bats"
       "bash"
     ]
-  ) root;
+  ) root) (root + "/.agents");
   justFiles = lib.fileset.unions [
     (root + "/Justfile")
     (lib.fileset.fileFilter (file: file.hasExt "just") (root + "/just"))

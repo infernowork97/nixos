@@ -3,15 +3,18 @@ set -euo pipefail
 clip() { if [ -n "${WAYLAND_DISPLAY:-}" ]; then wl-copy; else xclip -selection clipboard; fi; }
 marker='# software-factory-age-key: not generated yet'
 grep -qF "$marker" .sops.yaml || {
-    echo "ERROR: .sops.yaml already lists a software-factory key." >&2
-    echo "A new key cannot decrypt secrets/hosts/software-factory.yaml; to rotate," >&2
-    echo "put the marker line back by hand and re-encrypt with 'sops updatekeys'." >&2
-    exit 1
+  echo "ERROR: .sops.yaml already lists a software-factory key." >&2
+  echo "A new key cannot decrypt secrets/hosts/software-factory.yaml; to rotate," >&2
+  echo "put the marker line back by hand and re-encrypt with 'sops updatekeys'." >&2
+  exit 1
 }
 
 key=$(age-keygen 2>/dev/null)
 public=$(printf '%s\n' "$key" | sed -n 's/^# public key: //p')
-[ -n "$public" ] || { echo "ERROR: age-keygen produced no public key." >&2; exit 1; }
+[ -n "$public" ] || {
+  echo "ERROR: age-keygen produced no public key." >&2
+  exit 1
+}
 
 printf '%s\n' "$key" | clip
 unset key

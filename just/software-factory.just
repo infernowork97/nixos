@@ -15,6 +15,7 @@
 # ─── Secrets ─────────────────────────────────────────────────────────────────
 
 # Copies stdin to the clipboard, Wayland or X11; with no input, clears it.
+[private]
 _clip := 'clip() { if [ -n "${WAYLAND_DISPLAY:-}" ]; then wl-copy; else xclip -selection clipboard; fi; }'
 
 # The operator's own age key: the one that can edit every secrets file. It lives
@@ -130,6 +131,7 @@ factory-link-up $iface:
     set -euo pipefail
     case "$iface" in
         "" | *[!a-zA-Z0-9_-]*) echo "ERROR: invalid interface name '$iface' (see: ip -br link)" >&2; exit 1 ;;
+        *) ;;
     esac
     nmcli connection delete factory-install-link >/dev/null 2>&1 || true
     nmcli connection add type ethernet ifname "$iface" con-name factory-install-link \
@@ -140,7 +142,10 @@ factory-link-up $iface:
 
 # Show the addresses the box got over the install link
 factory-link-leases:
-    @ip -4 neigh show | grep '^10\.42\.0\.' || echo "No box seen on 10.42.0.0/24 yet."
+    #!/usr/bin/env bash
+    set -euo pipefail
+    neighbours=$(ip -4 neigh show)
+    grep '^10\.42\.0\.' <<<"$neighbours" || echo "No box seen on 10.42.0.0/24 yet."
 
 # Remove the install link once the box is on Wi-Fi
 factory-link-down:
@@ -155,51 +160,9 @@ factory-link-down:
 # here, where the caches are warm, and copied over.
 #
 # Install NixOS on the box over its install-link address (wipes its disk)
+[positional-arguments]
 factory-install $ip:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    case "$ip" in
-        *[!0-9.]* | "") echo "ERROR: expected an IPv4 address, got '$ip'" >&2; exit 1 ;;
-        *) ;;
-    esac
-
-    # Secure Boot locks the kernel down, and a locked-down kernel refuses to
-    # kexec the unsigned installer - midway, after the age key was pasted.
-    lockdown=$(ssh -o ConnectTimeout=10 "root@$ip" 'cat /sys/kernel/security/lockdown 2>/dev/null || echo "[none]"')
-    case "$lockdown" in
-        *"[none]"*) ;;
-        *) echo "ERROR: the box's kernel is locked down ($lockdown): turn Secure Boot off in its BIOS (F10)." >&2; exit 1 ;;
-    esac
-
-    extra=$(mktemp -d)
-    trap 'rm -rf "$extra"' EXIT
-    install -d -m 700 "$extra/var/lib/sops-age"
-
-    echo "Paste 'software-factory-age-key' from Bitwarden, then press Ctrl-D on a new line:"
-    (umask 077; cat > "$extra/var/lib/sops-age/keys.txt")
-    grep -q '^AGE-SECRET-KEY-1' "$extra/var/lib/sops-age/keys.txt" || {
-        echo "ERROR: does not look like an age private key." >&2
-        exit 1
-    }
-
-    # From the factory-install shell when inside it, and otherwise the same
-    # flake.lock-pinned build.
-    if command -v nixos-anywhere >/dev/null 2>&1; then
-        anywhere=(nixos-anywhere)
-    else
-        anywhere=(nix run --inputs-from . nixpkgs#nixos-anywhere --)
-    fi
-
-    "${anywhere[@]}" \
-        --flake .#software-factory \
-        --build-on local \
-        --extra-files "$extra" \
-        --target-host "root@$ip"
-
-    # The installed system has a new host key on the same address.
-    ssh-keygen -R "$ip" >/dev/null 2>&1 || true
-    echo "Installed. Once software-factory shows in the tailnet, unplug the ethernet"
-    echo "cable and check it rejoins over Wi-Fi."
+    @bash "{{ justfile_directory() }}/just/scripts/factory-install.sh" "$@"
 
 # Deploys the working tree as it is, committed or not. The flake and its inputs
 # are copied to the server's store - content-addressed paths, which need no
