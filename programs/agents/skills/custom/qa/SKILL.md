@@ -16,6 +16,7 @@ owns the decisions.
   never change product code, tests or config. The only files you may commit
   are `QA.md` files, and only after the user approves the diff. The one
   exception is a draft host PR the user chose in step 3, which an agent writes.
+- **Quality changes nothing here.** QA runs only when the user asks, in any mode.
 - **One question per `AskUserQuestion`.** Never batch blockers. Never ask what
   a tool, the code or `QA.md` can answer.
 - **The user always approves the plan** before any plan item runs, even when
@@ -65,7 +66,7 @@ Every Claude session has these on PATH, whatever the project:
   `capture(context, file)` logs console, page errors and failed requests with
   credentials redacted; `VIEWPORT` is the 960x540 every page and video uses.
 - `qa-session start <run> [--url <url>] [--storage-state <auth.json>]
-  [--chain-id <n> [--rpc <url>] [--forward-rpc <regex>]...]` - one headless
+  [--chain-id <n> [--rpc <url> [--forward-rpc <regex>]...]]` - one headless
   Chromium that outlives the scripts driving it, logged in and on the page,
   with the wallet when `--chain-id` is given. It returns once the page is
   open and writes its console, redacted, to `<run>/qa-session-console.log`.

@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2154 # set by another fragment: the assembled script is checked whole
 # Copies the kernel crash dumps systemd-pstore archived, root-only, into a
 # directory the agent account can read, for `factory-ctl crash-log`. Runs as
 # root at boot and takes no input. A dump is <id>/<part>/dmesg.txt, so its copy

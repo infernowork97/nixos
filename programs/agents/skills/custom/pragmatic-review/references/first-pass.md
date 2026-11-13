@@ -28,6 +28,12 @@ With a PR argument, fetch it instead of reading the working tree: set `BASE` to
 `HEAD_SHA=$(git rev-parse FETCH_HEAD)`, diff `"$MB" "$HEAD_SHA"`, and write an
 empty `status`. Also read `gh pr view <n> --json title,body,comments,reviews,commits`.
 
+**Mutation report**, for the tests agent or breaker. With a PR (the argument, or the
+branch's own from `gh pr view`), take the run id from the newest comment
+holding `<!-- mutation-report -->`. Only when `gh run view <id> --json headSha`
+equals `$HEAD_SHA`, run `gh run download <id> -n mutation-diff -D "$D/mutation"`.
+Stale, missing or still running: no mutant data. Never wait for CI.
+
 **Fail fast.** If the base does not resolve, the PR does not exist, or the diff
 and the untracked list are both empty, stop and say so - not inside the agents.
 
@@ -74,6 +80,39 @@ understanding:
 4. **Anchors** - a migration, a new route, a deleted check, a new dependency, a
    `WIP` subject.
 
+## Trivial check
+
+On every review, unless your arguments say `not Trivial`. The rule is under
+Trivial in your instructions. Decide from `stat` and the changed lines of `diff`,
+removed lines included, alone: no caller's mark, PR text or requirement can make a diff qualify, and a
+brief cannot argue you out of a miss.
+
+A diff does not qualify when any of these holds:
+
+- over about 100 changed lines, generated lockfiles aside;
+- the tier is `sensitive`, or a topic of the never-list shows on a changed line:
+  a deleted auth check counts as much as an added one;
+- it changes the data model: a schema, stored or wire data, a type other modules
+  share. Local UI state is not the data model;
+- it changes a skill or instructions file beyond a typo.
+
+**Not qualifying.** With `, Trivial` in your arguments, stop and spawn nothing:
+return `Escalate: <the limit or row it hit>`. Without it, go on to Phase 2.
+
+**Qualifying.** You are the one agent and you spawn none: this replaces Phases
+2-4. Read `references/bar.md` and `references/blockers.md`, then over `$D/diff`:
+
+1. The step 1 sweep of `blockers.md`, then any security hole or irreversible
+   damage the diff introduces. The sweep is the task's only security gate, so
+   judge every hit there, and refute by its rules.
+2. The bar's always-check list.
+3. One verdict per requirement, from the patch and a few reads.
+
+An unrefuted blocker, or a requirement you cannot settle that way, ends the fast
+path, as in Not qualifying. Otherwise write the report: a row for each
+always-check hit, the verdicts, the line `Security: Trivial - sweep clean, <tier>`
+and the verdict.
+
 ## Phase 2 - assumptions, requirements, questions
 
 Post a short numbered list of the assumptions the review runs under - only what
@@ -114,14 +153,37 @@ an assumption. With no such question, do not wait.
 Budgets are the bar's. The standard agents never carry a requirement.
 
 **The tier picks the agents.** At `code` and `sensitive` you always spawn them:
-a small diff is never a reason to review inline. `code`: all four standard
+a small diff is a reason to review inline only through the Trivial check. `code`: all four standard
 agents. `sensitive`: the same, blockers at DEEP with the routed references.
 `docs-only`: run the step-1 sweep of `references/blockers.md` on `$D/diff`
 yourself, spawn blockers only if it hits, and spawn neither regressions nor
 tests; keep what you swept for the report's Security line. House rules runs on
 every tier, requirement agents as usual.
 
-**Spawn in the foreground**, `run_in_background: false`, staggered so siblings
+**Balanced.** Blockers, routing and DEEP stay. House rules runs only when the
+diff changes types, a schema or a piece of state, so another diff gets no
+house-rule or DRY check. If you spawn no agent at all, you run the bar's
+always-check list over `$D/diff` yourself, rows in the report, as the Trivial
+path does. Tests runs only when it changes tests or the mutation report lists
+a mutant. Phase 2 makes
+at most 2 requirement groups. At `code` and `sensitive` no regressions agent
+runs while a group exists: the first group's prompt adds its brief, at the
+normal bar, and that agent returns those findings under `regressions`. They are
+not requirement findings: no 🔍, and Phase 4's step 2 applies. With no tests
+agent, the regressions brief also asks: does a bug fix come with a test that was
+red before it?
+
+**POC.** On every tier, one quick breaker agent replaces the table: no routing,
+no DEEP, no groups, no escalation. Its brief: "You are the breaker: one quick
+STANDARD pass. Read `blockers.md`, `house-rules.md` and `tests.md` from the
+`references/` directory in your prompt and do all three jobs, plus these
+requirements: <list>. Try to break the failure paths. Return one verdict per
+requirement first, then major findings only." The report keeps its verdicts;
+only the table narrows to Majors. The Security line says
+`POC - one breaker pass`.
+
+**Spawn with `subagent_type: reviewer`, in the foreground**,
+`run_in_background: false`, staggered so siblings
 reuse the cached prompt prefix: the first agent alone in one message, then all
 the others together in the next. Never end a turn while a review agent is
 running: an orchestrator that spawned in the background handed back before its
@@ -129,8 +191,8 @@ agents returned.
 
 **Every prompt starts with the same shared block:**
 
-1. The bar: everything below the `---` line of `references/bar.md`, pasted
-   verbatim. You read it once, for this.
+1. The bar: "Read this file first", with the absolute path of
+   `references/bar.md`. Never retype it. You read it once, for Phase 4.
 2. The review directory `$D` and its files: `diff`, `stat`, `log`, `status`,
    `index`.
 3. Your intent summary, in your words - never the raw PR prose.
@@ -141,8 +203,9 @@ angle with their line ranges in `diff`, and for a brief file the absolute path
 of this skill's `references/` directory. The tests agent also gets the
 absolute path of `engineering`'s `references/tests.md`: this skill's base
 directory with `pragmatic-review` replaced by `engineering`, never a `..`
-path, which does not resolve between installed skills. A standard agent gets
-one line: "Requirement agents cover the user's requirements; leave them alone."
+path, which does not resolve between installed skills, and
+`$D/mutation/mutation-diff.json` or `no mutant data: <stale|missing>`. The
+breaker gets that `tests.md` path and mutation input too. A standard agent gets one line: "Requirement agents cover the user's requirements; leave them alone."
 
 **Regressions brief**, pasted:
 
@@ -160,9 +223,9 @@ one line: "Requirement agents cover the user's requirements; leave them alone."
 
 > You are requirement agent <label>, at <STANDARD | DEEP> depth. Your
 > requirements, restated: <list>. The user's words: <quote>. They are your whole
-> job, and inside their scope the bar is lower: a real answer the user might
-> dispute is still worth returning. Follow a requirement outside the diff if
-> it leads there; what you find there is `pre-existing`. A requirement about
+> job, unless this prompt adds another, and inside their scope the bar is
+> lower: a real answer the user might dispute is still worth returning. Follow
+> a requirement outside the diff if it leads there; what you find there is `pre-existing`. A requirement about
 > the house rules: load `engineering`, and `ui-coding` for UI.
 
 ## Phase 4 - judge, do not re-review
@@ -194,9 +257,10 @@ Four exceptions:
   breaks, for whom and when; without either, correct it to Minor. A scream
   quotes no rule, so judge it on that `trigger`.
 - **Test findings** are judged the same way, on the quoted rule or the quoted
-  intent. A Major also needs its `trigger` to name the break the test misses,
-  the intent it rejects or the old code it passes on; without one, correct it
-  to Minor if a quoted rule backs it, else drop it. Never raise a coverage wish.
+  intent. A Major also needs its `trigger` to name the survivor or break the
+  test misses, the intent it rejects or the old code it passes on; without
+  one, correct it to Minor if a quoted rule backs it, else drop it. A survivor
+  alone is Minor. Never raise a coverage wish.
 - **Requirement findings** skip step 2. A `not met` verdict is a Major row by
   default. Carry every verdict through intact, Met included - they answer a
   question and are not findings.

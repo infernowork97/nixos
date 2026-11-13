@@ -1,7 +1,7 @@
 ---
 name: pragmatic-review
-description: Reviews a diff or PR like a pragmatic engineer, a fresh subagent per pass. A first review picks a risk tier and runs blockers, regressions, house-rules and tests agents plus one per requirement, answered Met, Not met or Unverified; a sensitive diff (CI, auth, database, secrets, deploy) or a `security-sensitive` requirement naming topics gets a DEEP security review; a re-review (--fixes <sha>) checks only the fix diff. Always blocks on security (injection, RCE, leaked data, broken auth, committed secrets) and irreversible damage (destructive migrations with an unproven WHERE, unbounded deletes), plus broken code and TEMP, WIP or debug commits. Flags engineering and ui-coding rule violations, DRY included, and fake or weak tests. Data-model violations, DB schemas above all, are Major, other rules Minor. Mergeable iff no Major survives. Drops taste and edge cases. Nothing is fixed or posted until a picker says so; a delegating agent answers it. Use before merging a PR or branch.
-argument-hint: "[requirements] [PR number or URL] [--fixes <first-review head sha>]"
+description: Reviews a diff or PR like a pragmatic engineer, a fresh subagent per pass. A first review picks a risk tier and, by Quality, runs blockers, regressions, house-rules and tests agents plus one per requirement, answered Met, Not met or Unverified; a sensitive diff (CI, auth, database, secrets, deploy) or a `security-sensitive` requirement naming topics gets a DEEP security review; a re-review (--fixes <sha>) checks only the fix diff. Always blocks on security (injection, RCE, leaked data, broken auth, committed secrets) and irreversible damage (destructive migrations with an unproven WHERE, unbounded deletes), plus broken code and TEMP, WIP or debug commits. Flags engineering and ui-coding rule violations, DRY included, and fake or weak tests. Data-model violations, DB schemas above all, are Major, other rules Minor. Mergeable iff no Major survives. Drops taste and edge cases. Nothing is fixed or posted until a picker says so; a delegating agent answers it. Use before merging a PR or branch.
+argument-hint: "[requirements | --requirements <path>] [PR number or URL] [--fixes <first-review head sha>] [Quality: <mode>]"
 ---
 
 # Pragmatic Review
@@ -16,30 +16,38 @@ leaks data, and burying one real bug under twelve opinions.
 
 ## Where this runs
 
-- **In a fresh subagent, one per pass.** A caller such as `engineer` spawns an
-  agent whose prompt is "invoke `pragmatic-review` with: <arguments>", and does
-  not load this skill itself. Invoked by the user, it runs in their session.
+- **In a fresh subagent, one per pass.** A caller such as `engineer` spawns a
+  `subagent_type: review-lead` agent, which starts with this skill loaded, whose
+  prompt is "invoke `pragmatic-review` with: <arguments>", and does not load
+  this skill itself. Invoked by the user, it runs in their session.
 - **Load it once.** If this text is already in your context, never invoke the
   skill again, and never read a reference twice: what you read, you hold. The
   review agents you spawn never load it - their prompts carry what they need.
 - **Read a reference only in the step that names it.** References live in
-  `references/` under the base directory the Skill tool reported.
+  `references/` under this skill's base directory, printed above this text.
 - **Delegated** means another agent invoked you. You cannot ask anyone: your
-  caller answers the pickers from your return, by replying to you or by acting
-  on the table itself.
+  caller answers the pickers itself, by acting on the table in your return.
 
 ## Input
 
-`$ARGUMENTS` may hold, in any order:
+Your prompt, or the arguments, may hold, in any order:
 
 - **A PR** - a bare number or a `github.com/.../pull/N` URL. Without one, review
   the current branch, uncommitted work included.
 - **`--fixes <sha>`** - this is a re-review of the fixes made since a first
   review whose head was `<sha>`, the `Reviewed head` line of its return. Without
   it, this is a first review.
+- **`Quality: <mode>`** - your instructions define it; `first-pass.md` and
+  `fixes.md` branch on it. `, Trivial` after the mode says the caller runs the
+  fast track; `, not Trivial` turns the Trivial check off. Neither makes a diff
+  qualify: the check reads the diff.
+- **`--requirements <path>`** - a file holding the requirements, the form every
+  calling agent uses; a re-review's adds the "finding N is fixed" lines. Read
+  it once.
 - **Requirements** - anything else, usually a bracketed list, one per bullet or
   line; *tips* is a synonym. On a re-review the caller passes the first review's
-  requirements again, plus "finding N is fixed" for each row it fixed.
+  requirements again, plus "finding N is fixed: <the row's What and Impact>"
+  for each row it fixed.
 
 Anything the user says must hold, including in a reply to your question, is a
 requirement. No requirements - nothing, an empty string, `no requirements` - is
@@ -61,13 +69,13 @@ Before the action picker is answered, never post a review or comment, approve or
 request changes, or edit, commit, push or amend anything. Every GitHub call
 until then is read-only (`gh pr view`, `git fetch`). Being asked to review is
 not permission to act. When another agent invoked this skill, it stands in for
-the user and its answer is the instruction.
+the user and does the acting.
 
 ## The bar
 
 `references/bar.md` is the bar: severity, the always-check list, what is never a
-finding, refutation, and the agents' return schema. You paste it into every
-agent's prompt and judge their returns at it. The verdict is mechanical:
+finding, refutation, and the agents' return schema. You pass its absolute path
+to every agent, never retyping it, and judge their returns at it. The verdict is mechanical:
 **mergeable iff no Major survives.**
 
 **Blockers reverse the reluctance.** Security (injection, RCE, leaked user data,
@@ -82,21 +90,22 @@ diff; a pre-existing one gets one line under the table and does not block.
 `first-pass.md` sets how deep it digs: the sensitive tier gets a DEEP blockers
 agent that loads, on demand, the topic references the diff matches (CI, auth,
 database, secrets) plus common attacks. A `security-sensitive: <topics>`
-requirement forces DEEP and those topics.
+requirement forces DEEP and those topics, except at POC.
 
 **House rules are not taste.** A diff that plainly contradicts a rule written in
 `engineering` or `ui-coding`, DRY included, is a finding, judged on the rule
 quoted verbatim. It is Minor, unless the bar makes it a Major **data-model
-violation**.
+violation**. Balanced checks this only on the diffs `first-pass.md` names.
 
 ## The flow
 
 - **First review:** follow `references/first-pass.md` - write the diff once,
-  pick the tier, route, group the requirements, spawn, judge.
+  pick the tier, route, check for Trivial, group the requirements, spawn, judge.
 - **Re-review (`--fixes`):** follow `references/fixes.md` - one agent on the fix
   diff, unless the fixes are large.
 
-Both end in the report below, then the pickers.
+Both end in the report below, then the pickers. `Escalate` ends the review
+instead: it is the whole return, with the `Reviewed head` line.
 
 ## The report
 
@@ -108,7 +117,7 @@ whole return aims for 350 words and never passes 400, and its last line is
 
 **The table.** Skip it entirely when nothing survived - no empty table, no
 placeholder. Otherwise number the rows and sort by severity, Major then Minor
-then Nit. Mark a row from a requirement agent 🔍: it cleared a lower bar. A
+then Nit. Mark a row from a requirement 🔍: it cleared a lower bar. A
 house-rule row names its rule - "`engineering`: prefer SUM types over nullable
 fields". A row rated from an answer to an intent question says so.
 
@@ -135,13 +144,17 @@ Every ❌ is also a row, Major by default.
 > lives in another repo the agent could not read.
 
 **The security line**, one line, from the blockers agent's `checked` line or
-your own sweep: `Security: <tier> - <what was checked>`.
+your own sweep: `Security: <tier> - <what was checked>`. With a tests agent or
+breaker, one more under it: `Mutants: CI report at <sha7>` or `Mutants: no data
+(<stale|missing>) - tests reviewed by reading`.
 
 > Security: sensitive (DEEP) - sweep clean; 2 workflows checked for pwn
 > requests, expression injection, permissions, secrets, pins; cache not
 > restored in release job
 >
 > Security: docs-only - sweep clean on 4 files
+>
+> Security: Trivial - sweep clean, code tier
 
 **The verdict**, one line, last. It names the rows that drive it and what each
 is, and carries the arithmetic - raised versus survived, Met verdicts not
@@ -165,18 +178,11 @@ counted. Past three Major rows, name the two worst and count the rest.
    push**, **Fix locally**, **Post to PR**. Then stop until it is answered, and
    act by `references/handover.md`.
 
-Delegated, you cannot ask: after the verdict line, write "Reply with the rows to
-keep and an action - fix + commit & push, fix locally, post to PR - or act on
-the table yourself.", then the `Reviewed head` line.
+Delegated, you cannot ask and change nothing: after the verdict line, write "Act
+on the table yourself: this agent takes no action.", then the `Reviewed head`
+line.
 
 ## Rules of engagement
 
-- Be specific or be quiet. "This could have security implications" is noise;
-  "an unauthenticated POST to `/import` writes to the orders table" is signal.
-- One real bug beats ten observations. If the list is long, the bar slipped.
-  Never pad a clean diff with gentle suggestions.
-- Answer what you were asked: a requirement gets a verdict whether or not
-  anything was found there.
-- Review only what this diff changes and what it breaks.
+- Be specific or be quiet. If the list is long, the bar slipped.
 - If part of the diff was too large or unfamiliar to judge honestly, say which.
-- Drop a finding the moment it is shown wrong; never reach for a replacement.

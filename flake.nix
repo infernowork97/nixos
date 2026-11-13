@@ -50,18 +50,20 @@
       };
     in
     {
-      # `nix fmt` — nixfmt (RFC 166) via a treefmt wrapper.
-      formatter = lib.forAllSystems (pkgs: pkgs.nixfmt-tree);
+      # `nix fmt` - treefmt, the one door to every formatter.
+      formatter = lib.forAllSystems (pkgs: import ./programs/tech-checks/formatter.nix { inherit pkgs; });
 
       # `nix flake check` (run by `just check` in CI) validates every installed
       # SKILL.md - frontmatter present, name matches the directory, description
       # within the Agent Skills limit - the Claude Code MCP catalog logic, the
       # Neovim TypeScript server routing, the Neovim search config, and the
-      # Playwright environment.
+      # Playwright environment. The `<tech>-<kind>` checks at the end are the
+      # groups `just tech <tech>` builds, each with no host evaluation; CI builds
+      # this set on aarch64-linux (`check`) and x86_64-linux (`checks-x86_64`).
       checks = lib.forAllSystems (
         pkgs:
         let
-          # Both Neovim checks share one build of the real editor.
+          # Every Neovim check shares one build of the real editor.
           nvimChecks = import ./programs/nvim/check.nix {
             inherit pkgs inputs;
             root = self;
@@ -78,13 +80,13 @@
           # ~/.claude.json structure - against a synthetic catalog and secrets.
           claude-code = import ./programs/claude-code/check.nix { inherit pkgs; };
 
-          # The /self-improve transcript analyzer against synthetic transcripts:
-          # token dedupe, tool timing, redundant checks, failures and the window.
-          self-improve = import ./programs/agents/skills/checks/self-improve.nix { inherit pkgs; };
-
-          # The factory's PreToolUse Bash guards: large multi-file reads outside
-          # the skills directory and foreground waits blocked, all else allowed.
-          claude-bash-guards = import ./programs/claude-code/bash-guards-check.nix { inherit pkgs; };
+          # The real Claude Code configuration: no catalog skill hidden, and
+          # every measured size under its committed ceiling.
+          claude-config =
+            (import ./adapters/claude-code.nix {
+              inherit inputs pkgs;
+              root = self;
+            }).check;
 
           # That the Playwright environment given to agent sessions resolves
           # `require('playwright')` from an empty directory and finds Chromium,
@@ -101,6 +103,11 @@
           # to it. `plugins.snacks.settings` types no picker options, so a
           # misspelled key would otherwise ship silently.
           nvim-search = nvimChecks.search;
+
+          # That a .py file gets basedpyright and ruff running nixpkgs' binaries,
+          # ruff's hover and basedpyright's organize imports off, ruff as its
+          # formatter, and that <leader>tt runs `pytest <file>`.
+          nvim-python = nvimChecks.python;
 
           # Spell check. Pinned to the locked nixpkgs deliberately: typos' dictionary
           # is its product and grows with every release, so a floating version could
@@ -127,11 +134,6 @@
         # session browser shared by probe processes with redacted capture.
         # Linux only, as the Darwin sandbox cannot launch Chromium.
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          # The software factory's Claude policy (billing and permission mode),
-          # its repo scripts against a real git, and its egress rules through
-          # `nft --check`. Linux only, like the factory: darwin's procps has no
-          # pgrep, which factory-ctl needs.
-          software-factory = import ./programs/software-factory/check.nix { inherit pkgs; };
           # That the factory's home activation runs the relink: a farm factory-gc
           # may collect is otherwise never moved off. The one check that
           # evaluates a host, so `just quick-check` pays for it.
@@ -141,7 +143,26 @@
             pkgs.emptyFile;
           qa = import ./programs/playwright/qa-check.nix { inherit pkgs; };
         }
+        // import ./programs/tech-checks {
+          inherit pkgs;
+          claude = import ./adapters/claude-code.nix {
+            inherit pkgs inputs;
+            root = self;
+            # Synthetic paths, never read, so a wrapper's secret branches are in
+            # the text `shell-embedded` lints.
+            secrets = {
+              figma-token = "/run/secrets/figma-token";
+              qa-sepolia-key = "/run/secrets/qa-sepolia-key";
+            };
+          };
+        }
       );
+
+      # `just mutation-diff` and `just mutation` run it. Not a check: see
+      # programs/mutation/default.nix.
+      packages = lib.forAllSystems (pkgs: {
+        mutation = (import ./programs/mutation { inherit pkgs; }).runner;
+      });
 
       devShells = lib.forAllSystems (pkgs: {
         default = import ./shells/default.nix { inherit pkgs inputs; };

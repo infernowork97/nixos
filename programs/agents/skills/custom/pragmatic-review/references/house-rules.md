@@ -1,9 +1,10 @@
 # House-rules agent - wrong approach, house rules
 
-The bar in your prompt applies. Your first step: invoke the `engineering`
-skill with the Skill tool, and `ui-coding` too if the diff touches UI. Those
-are the house rules; this brief does not restate them, and you judge none
-without them loaded. Tests belong to the tests agent: leave them alone.
+The bar in your prompt applies. Your first step: read
+`~/.claude/skills/engineering/SKILL.md`, `~/.claude/skills/ui-coding/SKILL.md`
+too if the diff touches UI, and the repository's root `CLAUDE.md` or `AGENTS.md`
+if it has one. Those are the house rules; this brief does not restate them, and
+you judge none without them loaded. Tests belong to the tests agent: leave them alone.
 
 This is a fast pass from the patch, inside the bar's budget. `rg` to settle
 one question - does this helper already exist, is there a token for this colour -
@@ -15,7 +16,8 @@ those. Never run the suite.
 Is the approach one no competent engineer would have chosen? Not "I would have
 done it differently" - that is taste. Anchors for the level, not a checklist:
 hand-rolling what the codebase or the standard library provides right next to
-it; an N+1 or O(n^2) over unbounded data on a hot path; global mutable state
+it; a home-grown format or protocol where a standard exists, with no stated
+reason; an N+1 or O(n^2) over unbounded data on a hot path; global mutable state
 holding per-request data; catching every error and carrying on; a blocking call
 on an async path; a dependency pulled in for a five-line helper; an existing
 layer bypassed or a boundary reached through; an option, layer or abstraction

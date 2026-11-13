@@ -428,8 +428,9 @@ Change the configuration with a pull request, merge it, then deploy `main`:
 
 What happens:
 
-1. The workflow refuses unless `check` passed on main's tip, then creates a
-   GitHub deployment for that commit. GitHub holds no credential to the box.
+1. The workflow refuses unless `check` and `checks-x86_64` passed on main's
+   tip, then creates a GitHub deployment for that commit. GitHub holds no
+   credential to the box.
 2. Within a minute the box sees it, checks the commit is still the tip of
    `main`, and builds it itself.
 3. It activates the new system and checks it can still be reached: Tailscale

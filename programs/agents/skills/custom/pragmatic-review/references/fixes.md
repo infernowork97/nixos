@@ -2,7 +2,7 @@
 
 The first review covered the branch. This pass covers only what changed since
 its head, `<pass1-head>` from `--fixes`. You are the one reviewing agent: spawn
-none unless the fixes are large. Your budgets are the bar's
+none, unless the fixes are large, then `subagent_type: reviewer`. Your budgets are the bar's
 (`references/bar.md`); batch every independent command.
 
 ## 1. Write the fix diff
@@ -37,6 +37,15 @@ The fixes are **large** when any of these holds:
 
 Large fixes get a full review: run `references/first-pass.md` on the whole
 branch, and say in one line under the assumptions why. Otherwise continue here.
+Balanced: size alone does not widen this pass, only rewritten history does.
+POC has no re-review.
+
+**Trivial.** Unless your arguments say `not Trivial`, run the Trivial check of
+`first-pass.md` over the fix diff, at the higher of its tier and any tier the
+caller names; "finding N is fixed" is one more requirement. Its size limit reads
+the whole branch, `--shortstat` from the merge base. A fix diff that
+qualifies takes that fast path instead of section 3. One that does not returns
+`Escalate` when your arguments say `, Trivial`, else goes on to section 3.
 
 ## 3. Review the fix diff yourself
 
@@ -48,8 +57,8 @@ Then, over the fix diff only:
   one at STANDARD depth, mechanical checks first. An untouched one gets the
   verdict "unchanged - the fixes do not touch it": the first review's verdict
   stands, and your caller holds it.
-- **"Finding N is fixed"** requirements: met iff the fix removes the finding's
-  trigger, checked on the code.
+- **"Finding N is fixed: <What and Impact>"** requirements: met iff the fix
+  removes that cause, checked on the code.
 - **A fast blockers check**: the step 1 sweep of `blockers.md` on the fix diff,
   then any security hole or irreversible damage the fixes introduce. If the
   fix diff is in the sensitive tier, run on it the greps of

@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2154 # set by another fragment: the assembled script is checked whole
 # crash-log: the kernel crash dumps the root unit factory-crash-log copied out
 # of pstore at boot (programs/software-factory/ops/crash-log.sh). Read-only.
 
@@ -5,7 +6,7 @@
 crash_tail_lines=80
 
 cmd_crash_log() {
-  local dumps newest dump
+  local dumps newest dump saved
   # The directory is missing until the unit has run once.
   dumps=$(find "$crash_dir" -maxdepth 1 -name '*.txt' -printf '%T@ %f\n' 2>/dev/null | sort -rn | cut -d ' ' -f 2-) || true
   if [ -z "$dumps" ]; then
@@ -14,7 +15,8 @@ cmd_crash_log() {
   fi
   echo "Kernel crash dumps, newest first ($crash_dir):"
   while read -r dump; do
-    echo "  $dump  $(date -r "$crash_dir/$dump" '+%F %H:%M %Z')"
+    saved=$(date -r "$crash_dir/$dump" '+%F %H:%M %Z')
+    echo "  $dump  $saved"
   done <<<"$dumps"
   newest=$(head -n 1 <<<"$dumps")
   echo
