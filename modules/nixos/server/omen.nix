@@ -70,6 +70,12 @@
     enable = true;
     # DNS comes from the static nameservers below, never the router.
     dns = "none";
+    # The Intel 7265 logs correctable PCIe AER errors (RxErr on root port
+    # 00:1c.5) every ~20 min, and one line of each report prints on tty1 at
+    # error level. Radio power save was on, and an always plugged-in server
+    # gains nothing from it. Link ASPM is BIOS-owned (the FADT disables OS
+    # ASPM control), so this is the lever the OS has.
+    wifi.powersave = false;
     ensureProfiles = {
       environmentFiles = [ config.sops.secrets.wifi-env.path ];
       profiles.home-wifi = {
