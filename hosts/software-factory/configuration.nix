@@ -30,6 +30,7 @@
       # `factory-ctl start` and never named here.
       repos = {
         nixos = "git@github.com:infernowork97/nixos.git";
+        Designer = "git@github.com:infernowork97/Designer.git";
       };
     };
 
